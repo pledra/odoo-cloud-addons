@@ -1,0 +1,24 @@
+repositories:
+  - name: pledra
+    url: https://charts.pledra.com
+
+environments:
+  prod:
+    values:
+      - valuesFile: 'helm-vals-prod.yaml'
+  staging:
+    values:
+      - valuesFile: 'helm-vals-staging.yaml'
+
+# Force specification of an environment and ignore "default"
+{{ if not (eq .Environment.Name "default") }}
+releases:
+  - name: doodba-{{ readFile .Values.valuesFile | fromYaml | get "helmfileArgs.releaseName" }}-{{ .Environment.Name }}
+    chart: pledra/odoo-doodba
+    labels:
+      app: odoo
+      odoo: true
+    version: 1.x.x
+    values:
+      - {{ .Values.valuesFile }}
+{{ end }}

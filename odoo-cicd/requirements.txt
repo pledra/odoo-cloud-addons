@@ -1,0 +1,9 @@
+pre-commit==2.11.1
+GitPython==3.1.17
+texttable==1.6.3
+python-gitlab==2.10.1
+copier==5.1.0
+invoke==1.5.0
+pre-commit==2.11.1
+google-cloud-build==3.5.0
+google-cloud-storage==1.42.2

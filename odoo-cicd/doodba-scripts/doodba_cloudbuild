@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+from google.cloud.devtools import cloudbuild_v1
+from google.cloud import storage
+
+import google.auth
+import os
+import tarfile
+import pathlib
+import yaml
+
+from argparse import ArgumentParser
+from google.cloud.devtools.cloudbuild_v1.types.cloudbuild import StorageSource
+
+parser = ArgumentParser(description="Build a doodba project using google cloud builder")
+
+parser.add_argument(
+    "-s",
+    "--source",
+    required=True,
+    type=pathlib.Path,
+    help="Source path of the doodba project",
+)
+parser.add_argument(
+    "-b", "--bucket", required=True, help="GCS Bucket to store the cloudbuild source"
+)
+parser.add_argument(
+    "-p",
+    "--path",
+    default="source",
+    help="Path inside the GS Bucket to store the artifacts",
+)
+parser.add_argument(
+    "-c",
+    "--credentials",
+    help="Path to credentials file for google auth (overrides GOOGLE_APPLICATION_CREDENTIALS env var)",
+)
+parser.add_argument(
+    "-i",
+    "--image",
+    help="Docker image name of the build",
+)
+parser.add_argument("-t", "--tags", nargs='+', help="Docker image tag")
+parser.add_argument(
+    "-e",
+    "--envfile",
+    default="prod.yaml",
+    help="Yaml environment file to use in the build stage (default prod.yaml)",
+)
+
+# Implement safety check for existing image/tag ?
+
+def check_doodba_source(source_file_path):
+    """Check that source_file_path corresponds to a doodba scaffolding"""
+    return True
+
+
+def upload_blob(bucket_name, source_file_path, destination_blob_name):
+    """Archive source directory and push to GCS bucket"""
+    # The ID of your GCS bucket
+    # bucket_name = "your-bucket-name"
+    # The path to your file to upload
+    # source_file_name = "local/path/to/file"
+    # The ID of your GCS object
+    # destination_blob_name = "storage-object-name"
+
+    check_doodba_source(source_file_path)
+
+    archive_path = "%s/scaffolding.tgz" % os.path.dirname(source_file_path)
+    with tarfile.open(archive_path, "w:gz") as tar:
+        tar.add(source_file_path, arcname=os.path.sep)
+
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+
+    blob = bucket.blob(destination_blob_name)
+    blob.upload_from_filename(archive_path)
+
+    print("File {} uploaded to {}.".format(archive_path, destination_blob_name))
+
+
+args = parser.parse_args()
+
+if args.credentials:
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = args.credentials
+
+# Perform google API authentication
+print("Performing Google API login")
+credentials, project_id = google.auth.default()
+
+build_client = cloudbuild_v1.services.cloud_build.CloudBuildClient()
+build = cloudbuild_v1.Build()
+
+print("Uploading doodba source to GS bucket")
+upload_blob(args.bucket, args.source, args.path)
+
+storage_source = cloudbuild_v1.StorageSource(bucket=args.bucket, object_=args.path)
+build.source = cloudbuild_v1.Source(storage_source=storage_source)
+
+build_steps = [
+    {"name": "docker/compose:1.29.2", "args": ["-f", args.envfile, "build", "--pull"]}
+]
+
+# Get the doodba image name from common.yaml
+with open(os.path.join(args.source, "common.yaml"), "r") as file:
+    common_yaml = yaml.safe_load(file)
+    doodba_image = common_yaml["services"]["odoo"]["image"]
+    doodba_image_name, doodba_image_tag = doodba_image.split(":")
+
+build_image_name = args.image or doodba_image_name
+build_image_tag = args.tags[0] if args.tags else doodba_image_tag
+
+build_image = "%s:%s" % (build_image_name, build_image_tag)
+
+if doodba_image != build_image:
+    build_steps.append(
+        {
+            "name": "gcr.io/cloud-builders/docker",
+            "args": ["tag", doodba_image, build_image],
+        }
+    )
+
+# Add all subsequent tags as extra steps
+for img_tag in args.tags[1:]:
+    build_image = "%s:%s" % (build_image_name, img_tag)
+    build_steps.append(
+        {
+            "name": "gcr.io/cloud-builders/docker",
+            "args": ["tag", doodba_image, build_image],
+        }
+    )
+
+build.steps = build_steps
+build.images = [build_image]
+
+print("Creating build")
+operation = build_client.create_build(project_id=project_id, build=build)
+
+# Print the in-progress operation
+print("BUILD IN PROGRESS:")
+print(operation.metadata)
+
+result = operation.result()
+# Print the completed status
+print("RESULT:", result.status)

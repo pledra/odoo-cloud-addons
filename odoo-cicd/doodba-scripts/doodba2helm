@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+
+import pathlib
+import os
+import yaml
+
+from argparse import ArgumentParser
+from google.cloud.devtools.cloudbuild_v1.types.cloudbuild import StorageSource
+
+parser = ArgumentParser(
+    description="Generate a helm values.yaml file from a doodba scaffolding compatible with the pledra doodba helm chart"
+)
+
+parser.add_argument(
+    "-s",
+    "--source",
+    required=True,
+    type=pathlib.Path,
+    help="Source path of the doodba project",
+)
+parser.add_argument(
+    "-d",
+    "--destination",
+    type=pathlib.Path,
+    default="/opt/ci/helmfile/",
+    help="Destination dir for helm-values.yaml files"
+)
+
+args = parser.parse_args()
+
+# Get doodba scaffolding copier answers
+with open(os.path.join(args.source, ".copier-answers.yml"), "r") as file:
+    copier_vals = yaml.safe_load(file)
+
+helm_vals_generic = {
+    "replicaCount": 1,
+    "helmfileArgs": {
+        "releaseName": copier_vals["project_name"],
+    },
+    "image": {
+        "repository": copier_vals["odoo_oci_image"],
+        "tag": str(copier_vals["odoo_version"]),
+        "pullPolicy": "Always"
+    },
+    "ingress": {
+        "enabled": "true",
+        "annotations": {
+            "kubernetes.io/ingress.class": "nginx",
+            "nginx.ingress.kubernetes.io/proxy-buffering": "on",
+            "cert-manager.io/cluster-issuer": "letsencrypt",
+        }
+    },
+    "postgres": {
+        "image": "postgres",
+        "tag": copier_vals["postgres_version"],
+    }
+}
+
+helm_vals_prod = {
+    "postgresqlDatabase": copier_vals["postgres_dbname"],
+    "ingress": {
+        "hosts": [{
+            "host": copier_vals["domains_prod"]
+        }],
+        "tls": [
+            {
+                "secretName": "doodba-%s" %  copier_vals["domains_prod"].split(".")[0],
+                "hosts": [
+                    copier_vals["domains_prod"]
+                ]
+            }
+        ]
+    }
+}
+helm_vals_prod = {**helm_vals_generic, **helm_vals_prod}
+
+helm_vals_test = {
+    "postgresqlDatabase": "staging",
+    "ingress": {
+        "hosts": [{
+            "host": copier_vals["domains_test"]
+        }],
+        "tls": [
+            {
+                "secretName": "doodba-%s" % copier_vals["domains_test"].split(".")[0],
+                "hosts": [
+                    copier_vals["domains_test"]
+                ]
+            }
+        ]
+    }
+}
+
+helm_vals_test = {**helm_vals_generic, **helm_vals_test}
+
+with open(os.path.join(args.destination, "helm-vals-prod.yaml"), "w") as file:
+    yaml.dump(helm_vals_prod, file)
+
+with open(os.path.join(args.destination, "helm-vals-staging.yaml"), "w") as file:
+    yaml.dump(helm_vals_test, file)
+    
+print("Generated helm-vals for production & staging environment")

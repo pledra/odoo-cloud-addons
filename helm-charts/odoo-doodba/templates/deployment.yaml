@@ -1,0 +1,175 @@
+{{- $dbType := default "none" .Values.postgresql.externalDatabase -}}
+{{- $gcloud_sql := and (not .Values.postgresql.enabled) (eq $dbType "gcloud") .Values.postgresql.gcInstanceConnectionName true -}}
+{{- $gcloud_sql_credentials := .Values.postgresql.gcCredentialsFile | default "credentials.json" -}}
+{{- $redisExistingSecret := .Values.redis.existingSecret | default false}}
+{{- $redisExistingSecretPasswordKey := .Values.redis.redisExistingSecretPasswordKey | default false}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "odoo-doodba.fullname" . }}
+  labels:
+{{ include "odoo-doodba.labels" . | indent 4 }}
+  annotations:
+    checksum/configMap: {{ toYaml .Values.configMap | sha256sum }}
+spec:
+  strategy:
+    {{- toYaml .Values.updateStrategy | nindent 4 }}
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "odoo-doodba.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "odoo-doodba.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+      annotations:
+        checksum/configmap: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{ if .Values.rollDeploy }}
+        rollDeploy: {{ randAlphaNum 5 | quote }}
+        {{ end }}
+        {{ if .Values.annotations }}
+          {{- toYaml .Values.annotations | nindent 8 }}
+        {{ end }}
+    spec:
+    {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      serviceAccountName: {{ template "odoo-doodba.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+    {{ if and .Values.persistence.enabled .Values.persistence.initVolume }}
+      initContainers:
+        - name: volume-hack
+          image: busybox
+          command: ['sh', '-c', 'chown 1000:1000 -R /odoo']
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "100Mi"
+            limits:
+              cpu: "100m"
+              memory: "200Mi"
+          volumeMounts:
+          - name: odoo
+            mountPath: /odoo
+    {{ end }}
+      containers:
+        - name: server
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8069
+          env:
+          - name: PGHOST
+            value: {{ ternary (include "odoo-doodba.postgresql.fullname" .) .Values.postgresql.postgresHost .Values.postgresql.enabled | default "localhost" }}
+          - name: PGUSER
+            value: {{ .Values.postgresql.postgresqlUsername | quote }}
+          - name: PGPASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: {{ ternary (printf "%s-%s" .Release.Name "postgresql") (include "odoo-doodba.fullname" .) .Values.postgresql.enabled | quote }}
+                key: postgresql-password
+          - name: ADMIN_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: {{ include "odoo-doodba.fullname" . }}
+                key: odoo-password
+          - name: ODOO_CFG_SERVER_WIDE_MODULES
+            value: {{ template "odoo-doodba.serverWideModules" . }}
+          {{ if .Values.redis.enabled }}
+          - name: ODOO_SESSION_REDIS
+            value: "1"
+          - name: ODOO_SESSION_REDIS_HOST
+            value: {{ template "odoo-doodba.redis.fullname" . }}
+          {{ if .Values.redis.redisPort }}
+          - name: ODOO_SESSION_REDIS_PORT
+            value: {{ .Values.redis.redisPort | quote }}
+          {{ end }}
+          - name: ODOO_SESSION_REDIS_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: {{ ternary $redisExistingSecret (printf "%s-%s" .Release.Name "redis") $redisExistingSecret | quote }}
+                key: {{ ternary $redisExistingSecretPasswordKey "redis-password" $redisExistingSecretPasswordKey | quote }}
+          {{ end }}
+          envFrom:
+          - configMapRef:
+              name: {{ include "odoo-doodba.fullname" . }}
+            {{- if .Values.livenessProbe.enabled }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.livenessProbe.successThreshold }}
+            failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.readinessProbe.enabled }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.readinessProbe.successThreshold }}
+            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{ if .Values.persistence.enabled }}
+          volumeMounts:
+          - name: odoo
+            mountPath: /var/lib/odoo
+            {{ if .Values.persistence.subPath }}
+            subPath: {{ .Values.persistence.subPath }}
+            {{ end }}
+          {{- if ne (len .Values.persistence.extraVolumeMounts) 0 }}
+            {{ toYaml .Values.persistence.extraVolumeMounts | nindent 10 }}
+          {{- end }}
+          {{ end }}
+        {{ if and $gcloud_sql (not .Values.pgBouncer.enabled) }}
+        - name: cloudsql-proxy
+          image: gcr.io/cloudsql-docker/gce-proxy:1.16
+          command: ["/cloud_sql_proxy",
+                    "-instances={{ .Values.postgresql.gcInstanceConnectionName }}=tcp:5432",
+                    "-credential_file=/secrets/cloudsql/{{ $gcloud_sql_credentials }}"]
+          securityContext:
+            runAsUser: 2
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: cloudsql-instance-credentials
+              mountPath: /secrets/cloudsql
+              readOnly: true
+        {{ end }}
+      volumes:
+      {{ if .Values.persistence.enabled }}
+      - name: odoo
+        persistentVolumeClaim:
+          claimName: {{ .Values.persistence.existingClaim | default (include "odoo-doodba.fullname" .) }}
+      {{ end }}
+      {{ if and $gcloud_sql (not .Values.pgBouncer.enabled)}}
+      - name: cloudsql-instance-credentials
+        secret:
+          secretName: cloudsql-instance-credentials
+      {{ end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}

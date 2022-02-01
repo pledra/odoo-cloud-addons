@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "odoo-doodba.fullname" . }}
+  labels:
+{{ include "odoo-doodba.labels" . | indent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  {{- if (and (eq .Values.service.type "LoadBalancer") (not (empty .Values.service.loadBalancerIP))) }}
+  loadBalancerIP: {{ .Values.service.loadBalancerIP }}
+  {{ end }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: 8069
+      name: http
+      ports:
+    - port: {{ .Values.service.longPollingPort }}
+      targetPort: 8072
+      name: longpolling
+  selector:
+    app.kubernetes.io/name: {{ include "odoo-doodba.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
