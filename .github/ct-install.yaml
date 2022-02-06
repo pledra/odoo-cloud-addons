@@ -1,0 +1,6 @@
+chart-dirs:
+  - pledra
+chart-repos:
+  - pledra=https://charts-pledra.storage.googleapis.com
+debug: true
+remote: origin
