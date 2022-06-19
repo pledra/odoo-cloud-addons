@@ -62,7 +62,3 @@ Create the name of the service account to use
     {{ default "default" .Values.serviceAccount.name }}
 {{- end -}}
 {{- end -}}
-
-{{- define "odoo-doodba.serverWideModules" -}}
-{{ concat (list "base" "web") (splitList "," (.Values.config.ODOO_CFG_SERVER_WIDE_MODULES | default "base") ) | uniq | join "," | quote }}
-{{- end -}}

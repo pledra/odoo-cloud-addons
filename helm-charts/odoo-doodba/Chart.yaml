@@ -6,7 +6,7 @@ name: odoo-doodba
 keywords:
   - odoo
   - doodba
-version: 1.1.10
+version: 1.1.11
 maintainers:
 - name: Paul Catinean
   email: pca@pledra.com
@@ -20,4 +20,6 @@ dependencies:
   condition: redis.enabled,
   version: 10.6.15
   repository: https://charts.bitnami.com/bitnami
-
+- name: common
+  version: 0.x.x
+  repository: https://charts.bitnami.com/bitnami
