@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout bitnami-labs/readme-generator-for-helm
+      - name: Checkout readme-generator-for-helm
         uses: actions/checkout@v2
         with:
           repository: 'bitnami-labs/readme-generator-for-helm'
@@ -56,7 +56,7 @@ jobs:
       - name: Push changes
         run: |
           # Push all the changes
-          cd helm-charts
+          cd odoo-cloud-addons
           if git status -s | grep helm-charts; then
             git config user.name "Pledra Containers"
             git config user.email "bot@pledra.com"
