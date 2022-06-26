@@ -25,7 +25,7 @@ annotations: {}
 ##  rollingUpdate:
 ##    maxSurge: 25%
 ##    maxUnavailable: 25%
-
+##
 updateStrategy:
   type: RollingUpdate
   rollingUpdate: {}
