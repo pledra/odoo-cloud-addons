@@ -36,7 +36,7 @@ jobs:
       - name: Checkout pledra/helm-charts
         uses: actions/checkout@v2
         with:
-          ref: ${{github.event.pull_request.head.ref}}
+          ref: ${{ github.head_ref }}
           repository: ${{github.event.pull_request.head.repo.full_name}}
           path: odoo-cloud-addons
           # token: ${{ secrets.PLEDRA_BOT_TOKEN }}
