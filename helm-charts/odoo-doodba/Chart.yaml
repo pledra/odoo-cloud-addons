@@ -14,7 +14,7 @@ maintainers:
 dependencies:
 - name: postgresql
   condition: postgresql.enabled,
-  version: 8.10.13
+  version: 16.13.x
   repository: https://charts.bitnami.com/bitnami
 - name: redis
   condition: redis.enabled,
