@@ -25,7 +25,7 @@ annotations: {}
 ##  rollingUpdate:
 ##    maxSurge: 25%
 ##    maxUnavailable: 25%
-
+##
 updateStrategy:
   type: RollingUpdate
   rollingUpdate: {}
@@ -55,7 +55,7 @@ serviceAccount:
   create: false
   # The name of the service account to use.
   # If not set and create is true, a name is generated using the fullname template
-  name:
+  name: ""
 
 ## Configure Pods Security Context
 ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod
@@ -77,7 +77,7 @@ containerSecurityContext:
 
 ## @param odooPassword Odoo user password
 ## Defaults to a random 10-character alphanumeric string if not set
-odooPassword:
+odooPassword: ""
 
 
 ## @param config values in odoo.conf format as multiline string will be merged with the default odoo.conf file and override any existing values
