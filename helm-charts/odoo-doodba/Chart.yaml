@@ -6,7 +6,7 @@ name: odoo-doodba
 keywords:
   - odoo
   - doodba
-version: 1.1.11
+version: 1.1.12
 maintainers:
 - name: Paul Catinean
   email: pca@pledra.com
