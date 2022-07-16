@@ -33,12 +33,12 @@ jobs:
       - name: Install readme-generator-for-helm dependencies
         run: cd readme-generator-for-helm && npm install
 
-      - name: Checkout bitnami/charts
+      - name: Checkout pledra/charts
         uses: actions/checkout@v2
         with:
           ref: ${{github.event.pull_request.head.ref}}
           repository: ${{github.event.pull_request.head.repo.full_name}}
-          path: charts
+          path: odoo-cloud-addons
           # token: ${{ secrets.PLEDRA_BOT_TOKEN }}
 
       - name: Execute readme-generator-for-helm
@@ -52,12 +52,12 @@ jobs:
           charts_dirs_changed="$(echo "$files_changed" | xargs dirname | grep -o "helm-charts/[^/]*" | sort | uniq || true)"
           for chart in ${charts_dirs_changed}; do
             echo "Updating README.md for ${chart}"
-            readme-generator-for-helm/bin/index.js --values "charts/${chart}/values.yaml" --readme "charts/${chart}/README.md" --schema "/tmp/schema.json"
+            readme-generator-for-helm/bin/index.js --values "odoo-cloud-addons/${chart}/values.yaml" --readme "odoo-cloud-addons/${chart}/README.md" --schema "/tmp/schema.json"
           done
       - name: Push changes
         run: |
           # Push all the changes
-          cd charts
+          cd odoo-cloud-addons
           if git status -s | grep helm-charts; then
             git config user.name "Pledra Containers"
             git config user.email "bot@pledra.com"
