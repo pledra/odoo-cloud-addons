@@ -57,7 +57,7 @@ jobs:
       - name: Push changes
         run: |
           # Push all the changes
-          cd odoo-cloud-addons
+          cd charts
           if git status -s | grep helm-charts; then
             git config user.name "Pledra Containers"
             git config user.email "bot@pledra.com"
