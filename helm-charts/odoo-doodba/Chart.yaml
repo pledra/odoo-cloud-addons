@@ -1,12 +1,12 @@
 apiVersion: v2
-appVersion: "13.0"
+appVersion: "14.0"
 description: Odoo chart for Kubernetes using Tecnativa's Docker odoo base (Doodba)
 icon: https://odoocdn.com/openerp_website/static/src/img/assets/png/odoo_logo.png?a=b
 name: odoo-doodba
 keywords:
   - odoo
   - doodba
-version: 2.0.0
+version: 2.0.1
 maintainers:
 - name: Paul Catinean
   email: pca@pledra.com
