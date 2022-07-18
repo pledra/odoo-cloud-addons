@@ -102,6 +102,3 @@ Odoo Doodba
 | `nodeSelector`                           | Node labels for pod assignment                                                                                                         | `{}`                     |
 | `tolerations`                            | Tolerations for pod assignment                                                                                                         | `[]`                     |
 | `affinity`                               | Affinity for pod assignment                                                                                                            | `{}`                     |
-
-
-| `image.pullSecrets` | Odoo image pull secrets                            | `[]`                         |
