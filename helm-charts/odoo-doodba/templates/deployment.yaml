@@ -39,9 +39,8 @@ spec:
         {{- toYaml . | nindent 8 }}
     {{- end }}
       serviceAccountName: {{ template "odoo-doodba.serviceAccountName" . }}
-      {{- if .Values.podSecurityContext.enabled }}
-      securityContext: {{- omit .Values.podSecurityContext "enabled" | toYaml | nindent 8 }}
-      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
     {{ if and .Values.persistence.enabled .Values.persistence.initVolume }}
       initContainers:
         - name: volume-hack
@@ -82,6 +81,21 @@ spec:
               secretKeyRef:
                 name: {{ include "odoo-doodba.fullname" . }}
                 key: odoo-password
+          {{ if .Values.redis.enabled }}
+          - name: ODOO_SESSION_REDIS
+            value: "1"
+          - name: ODOO_SESSION_REDIS_HOST
+            value: {{ template "odoo-doodba.redis.fullname" . }}
+          {{ if .Values.redis.redisPort }}
+          - name: ODOO_SESSION_REDIS_PORT
+            value: {{ .Values.redis.redisPort | quote }}
+          {{ end }}
+          - name: ODOO_SESSION_REDIS_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: {{ ternary $redisExistingSecret (printf "%s-%s" .Release.Name "redis") $redisExistingSecret | quote }}
+                key: {{ ternary $redisExistingSecretPasswordKey "redis-password" $redisExistingSecretPasswordKey | quote }}
+          {{ end }}
           envFrom:
           - configMapRef:
               name: {{ include "odoo-doodba.fullname" . }}
@@ -111,6 +125,9 @@ spec:
             {{- toYaml .Values.resources | nindent 12 }}
           {{ if .Values.persistence.enabled }}
           volumeMounts:
+          - name: odoo-config
+            mountPath: "/opt/odoo/custom/conf.d"
+            readOnly: true
           - name: odoo
             mountPath: /var/lib/odoo
             {{ if .Values.persistence.subPath }}
@@ -140,6 +157,9 @@ spec:
         persistentVolumeClaim:
           claimName: {{ .Values.persistence.existingClaim | default (include "odoo-doodba.fullname" .) }}
       {{ end }}
+      - name: odoo-config
+        configMap:
+          name: {{ include "odoo-doodba.fullname" . }}
       {{ if and $gcloud_sql (not .Values.pgBouncer.enabled)}}
       - name: cloudsql-instance-credentials
         secret:

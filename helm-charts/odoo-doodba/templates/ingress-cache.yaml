@@ -1,5 +1,9 @@
 {{- if and .Values.ingress.enabled .Values.ingress.cache.enabled -}}
-apiVersion: {{ include "common.capabilities.ingress.apiVersion" . }}
+{{- if semverCompare ">=1.19-0" .Capabilities.KubeVersion.Version -}}
+apiVersion: networking.k8s.io/v1
+{{- else -}}
+apiVersion: networking.k8s.io/v1beta1
+{{- end }}
 kind: Ingress
 metadata:
   name: {{ include "odoo-doodba.fullname" . }}-cache
@@ -55,9 +59,19 @@ spec:
         paths:
           {{- range $.Values.ingress.cache.paths }}
           - path: {{ . | quote }}
+            {{ if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.Version }}
+            pathType: ImplementationSpecific
+            {{ end }}
             backend:
+            {{ if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.Version }}
+              service:
+                name: {{ include "odoo-doodba.fullname" $ }}
+                port:
+                  number: {{ $.Values.service.port }}
+            {{ else }}
               serviceName: {{ include "odoo-doodba.fullname" $ }}
               servicePort: {{ $.Values.service.port }}
+            {{ end }}
           {{- end }}
   {{- end }}
 {{- end }}
