@@ -104,4 +104,3 @@ Odoo Doodba
 | `affinity`                               | Affinity for pod assignment                                                                                                            | `{}`                     |
 
 
-| `image.pullSecrets` | Odoo image pull secrets                            | `[]`                         |

@@ -2,6 +2,12 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {{ include "odoo-doodba.fullname" . }}
+  {{ if .Values.service.annotations }}
+  annotations:
+  {{- with .Values.service.annotations }}
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{ end }}
   labels:
 {{ include "odoo-doodba.labels" . | indent 4 }}
 spec:

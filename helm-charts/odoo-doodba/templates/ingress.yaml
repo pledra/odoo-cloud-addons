@@ -1,5 +1,9 @@
 {{- if .Values.ingress.enabled -}}
-apiVersion: {{ include "common.capabilities.ingress.apiVersion" . }}
+{{- if semverCompare ">=1.19-0" .Capabilities.KubeVersion.Version -}}
+apiVersion: networking.k8s.io/v1
+{{- else -}}
+apiVersion: networking.k8s.io/v1beta1
+{{- end }}
 kind: Ingress
 metadata:
   name: {{ include "odoo-doodba.fullname" . }}
@@ -38,18 +42,32 @@ spec:
       http:
         paths:
           - path: /
-            {{- if eq "true" (include "common.ingress.supportsPathType" $) }}
-            pathType: {{ default "ImplementationSpecific" $.Values.ingress.pathType }}
+            {{ if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.Version }}
+            pathType: ImplementationSpecific
             {{ end }}
             backend:
+            {{ if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.Version }}
+              service:
+                name: {{ include "odoo-doodba.fullname" $ }}
+                port:
+                  number: {{ $.Values.service.port }}
+            {{ else }}
               serviceName: {{ include "odoo-doodba.fullname" $ }}
               servicePort: {{ $.Values.service.port }}
+            {{ end }}
           - path: /longpolling
-            {{- if eq "true" (include "common.ingress.supportsPathType" $) }}
-            pathType: {{ default "ImplementationSpecific" $.Values.ingress.pathType }}
+            {{ if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.Version }}
+            pathType: ImplementationSpecific
             {{ end }}
             backend:
+            {{ if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.Version }}
+              service:
+                name: {{ include "odoo-doodba.fullname" $ }}
+                port:
+                  number: {{ $.Values.service.longPollingPort }}
+            {{ else }}
               serviceName: {{ include "odoo-doodba.fullname" $ }}
               servicePort: {{ $.Values.service.longPollingPort }}
+            {{ end }}
   {{- end }}
 {{- end }}
