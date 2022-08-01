@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v2
         with:
           fetch-depth: 0
 
@@ -20,13 +20,15 @@ jobs:
         with:
           python-version: 3.7
 
+      - uses: lhotari/action-upterm@v1
+        with:
+          ## limits ssh access and adds the ssh public key for the user which triggered the workflow
+          limit-access-to-actor: true
+          ## limits ssh access and adds the ssh public keys of the listed GitHub users
+          limit-access-to-users: PCatinean,pcatinean
+
       - name: Set up chart-testing
         uses: helm/chart-testing-action@v2.2.1
-
-      - name: Debug
-        run: ls -al
-        env:
-          DEBUG: true
 
       - name: Run chart-testing (list-changed)
         id: list-changed
