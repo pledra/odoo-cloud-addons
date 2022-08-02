@@ -8,7 +8,7 @@ keywords:
   - doodba
 version: 2.0.3
 maintainers:
-- name: PCatinean # Paul Catinean
+- name: PCatinean
   email: pca@pledra.com
   url: https://github.com/pledra/odoo-cloud-addons
 dependencies:
