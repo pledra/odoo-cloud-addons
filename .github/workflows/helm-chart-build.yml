@@ -38,5 +38,12 @@ jobs:
         uses: helm/kind-action@v1.2.0
         if: steps.list-changed.outputs.changed == 'true'
 
+      - uses: lhotari/action-upterm@v1
+        with:
+          ## limits ssh access and adds the ssh public key for the user which triggered the workflow
+          limit-access-to-actor: true
+          ## limits ssh access and adds the ssh public keys of the listed GitHub users
+          limit-access-to-users: PCatinean,pcatinean
+
       - name: Run chart-testing (install)
         run: ct install --config .github/ct-install.yaml --target-branch ${{ github.event.repository.default_branch }}
