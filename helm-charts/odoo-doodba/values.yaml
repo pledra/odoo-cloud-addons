@@ -34,8 +34,8 @@ updateStrategy:
 ## @param image.tag Odoo image tag (immutable tags are recommended)
 ## @param image.pullPolicy Odoo image pull policy
 image:
-  repository: tecnativa/doodba
-  tag: "15.0"
+  repository: pledra/doodba
+  tag: "15.0-test"
   pullPolicy: IfNotPresent
 
 ## @param imagePullSecrets Global Docker registry secret names as an array
@@ -104,21 +104,21 @@ postgresql:
   ## @param postgresql.enabled Deploy PostgreSQL container(s)
   enabled: true
 
+## PostgreSQL chart configuration
+## @param postgresql.auth.username Name for a custom user to create
+## @param postgresql.auth.password Password for the custom user to create
+## @param postgresql.auth.database Name for a custom database to create
+##
+  auth:
+    username: odoo
+    password: ""
+    database: odoo
+
   image:
     ## @param postgresql.image.repository Docker repository for postgresql image
     repository: postgres
     ## @param postgresql.image.tag Docker image tag for postgresql image
     tag: latest
-
-  ## @param postgresql.postgresqlUsername PostgreSQL non-root username
-  ## ref: https://hub.docker.com/_/postgres/
-  ##
-  postgresqlUsername: "odoo"
-
-  ## @param postgresql.postgresqlPassword PostgreSQL password
-  ## ref: https://hub.docker.com/_/postgres/
-  ##
-  postgresqlPassword: ""
 
   ## External Database Configuration
   ## All of these values are only used when postgresql.enabled is set to false
@@ -306,9 +306,9 @@ persistence:
   ##
   size: 8Gi
 
-  ## @param persistence.volumeName The name of the PVC
-  ## default value: odoo
-  volumeName: odoo
+  ## @param persistence.volumeName The name of an existing PVC
+  ## default value: ""
+  volumeName: ""
 
   ## @param persistence.subPath refer to a path within the mounted volume (useful for NFS shared storage and multiple environments/deployments)
   subPath: ""

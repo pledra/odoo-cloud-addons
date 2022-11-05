@@ -6,11 +6,11 @@ name: odoo-doodba
 keywords:
   - odoo
   - doodba
-version: 2.0.2
+version: 2.0.3
 maintainers:
-- name: Paul Catinean
+- name: PCatinean
   email: pca@pledra.com
-  url: http://pledra.com
+  url: https://github.com/pledra/odoo-cloud-addons
 dependencies:
 - name: postgresql
   condition: postgresql.enabled,

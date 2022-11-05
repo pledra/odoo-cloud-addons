@@ -39,8 +39,9 @@ spec:
         {{- toYaml . | nindent 8 }}
     {{- end }}
       serviceAccountName: {{ template "odoo-doodba.serviceAccountName" . }}
-      securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if .Values.podSecurityContext.enabled }}
+      securityContext: {{- omit .Values.podSecurityContext "enabled" | toYaml | nindent 8 }}
+      {{- end }}
     {{ if and .Values.persistence.enabled .Values.persistence.initVolume }}
       initContainers:
         - name: volume-hack
@@ -70,12 +71,13 @@ spec:
           - name: PGHOST
             value: {{ ternary (include "odoo-doodba.postgresql.fullname" .) .Values.postgresql.postgresHost .Values.postgresql.enabled | default "localhost" }}
           - name: PGUSER
-            value: {{ .Values.postgresql.postgresqlUsername | quote }}
+            value: {{ .Values.postgresql.auth.username | quote }}
           - name: PGPASSWORD
             valueFrom:
               secretKeyRef:
+                # TODO: use include odoo.databaseSecretName and Password
                 name: {{ ternary (printf "%s-%s" .Release.Name "postgresql") (include "odoo-doodba.fullname" .) .Values.postgresql.enabled | quote }}
-                key: postgresql-password
+                key: password
           - name: ADMIN_PASSWORD
             valueFrom:
               secretKeyRef:
