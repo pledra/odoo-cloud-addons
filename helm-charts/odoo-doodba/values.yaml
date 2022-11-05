@@ -34,8 +34,8 @@ updateStrategy:
 ## @param image.tag Odoo image tag (immutable tags are recommended)
 ## @param image.pullPolicy Odoo image pull policy
 image:
-  repository: tecnativa/doodba
-  tag: "15.0"
+  repository: pledra/doodba
+  tag: "15.0-test"
   pullPolicy: IfNotPresent
 
 ## @param imagePullSecrets Global Docker registry secret names as an array
