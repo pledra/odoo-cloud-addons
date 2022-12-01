@@ -80,6 +80,13 @@ containerSecurityContext:
 ## Defaults to a random 10-character alphanumeric string if not set
 odooPassword: ""
 
+## @param extraEnvVars Array with extra environment variables to add to the Odoo container
+## e.g:
+## extraEnvVars:
+##   - name: FOO
+##     value: "bar"
+##
+extraEnvVars: []
 
 ## @param config values in odoo.conf format as multiline string will be merged with the default odoo.conf file and override any existing values
 ## config: |

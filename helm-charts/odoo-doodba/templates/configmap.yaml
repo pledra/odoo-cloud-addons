@@ -8,3 +8,6 @@ data:
   {{- if .Values.config }}
   k8s_configmap.conf: {{ tpl (toYaml .Values.config) $ | indent 2 }}
   {{- end }}
+  {{- range $name, $value := .Values.extraEnvVars }}
+  {{ $name }}: {{ $value }}
+  {{- end }}
