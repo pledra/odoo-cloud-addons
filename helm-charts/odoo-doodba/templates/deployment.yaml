@@ -98,6 +98,9 @@ spec:
                 name: {{ ternary $redisExistingSecret (printf "%s-%s" .Release.Name "redis") $redisExistingSecret | quote }}
                 key: {{ ternary $redisExistingSecretPasswordKey "redis-password" $redisExistingSecretPasswordKey | quote }}
           {{ end }}
+          {{- if .Values.extraEnvVars }}
+          {{- include "common.tplvalues.render" (dict "value" .Values.extraEnvVars "context" $) | nindent 10 }}
+          {{- end }}
           envFrom:
           - configMapRef:
               name: {{ include "odoo-doodba.fullname" . }}
