@@ -3,6 +3,35 @@ entries:
   odoo-doodba:
   - apiVersion: v2
     appVersion: "15.0"
+    created: "2023-03-04T17:37:12.397964033Z"
+    dependencies:
+    - condition: postgresql.enabled,
+      name: postgresql
+      repository: https://charts.bitnami.com/bitnami
+      version: 11.x.x
+    - condition: redis.enabled,
+      name: redis
+      repository: https://charts.bitnami.com/bitnami
+      version: 17.x.x
+    - name: common
+      repository: https://charts.bitnami.com/bitnami
+      version: 1.x.x
+    description: Odoo chart for Kubernetes using Tecnativa's Docker odoo base (Doodba)
+    digest: 5735db0f302cee28b34e51ca8d8cd59d51b5461db573de64f9d2614eaaf8454d
+    icon: https://odoocdn.com/openerp_website/static/src/img/assets/png/odoo_logo.png?a=b
+    keywords:
+    - odoo
+    - doodba
+    maintainers:
+    - email: pca@pledra.com
+      name: PCatinean
+      url: https://github.com/pledra/odoo-cloud-addons
+    name: odoo-doodba
+    urls:
+    - https://github.com/pledra/odoo-cloud-addons/releases/download/odoo-doodba-2.0.4/odoo-doodba-2.0.4.tgz
+    version: 2.0.4
+  - apiVersion: v2
+    appVersion: "15.0"
     created: "2022-11-05T16:56:19.222504172Z"
     dependencies:
     - condition: postgresql.enabled,
@@ -88,4 +117,4 @@ entries:
     urls:
     - https://github.com/pledra/odoo-cloud-addons/releases/download/odoo-doodba-2.0.1/odoo-doodba-2.0.1.tgz
     version: 2.0.1
-generated: "2022-11-05T16:56:19.222522972Z"
+generated: "2023-03-04T17:37:12.397986833Z"
