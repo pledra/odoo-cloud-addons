@@ -73,7 +73,7 @@ spec:
           - name: PGUSER
             value: {{ .Values.postgresql.auth.username | quote }}
           - name: PGDATABASE
-            value: {{ .Values.postgresql.auth.database | quote }}
+            value: {{ .Values.odooDatabase | quote }}
           - name: PGPASSWORD
             valueFrom:
               secretKeyRef:
