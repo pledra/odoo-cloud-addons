@@ -4,42 +4,44 @@ Odoo Doodba
 
 ### 
 
-| Name                                 | Description                                                                                                                    | Value              |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ | ------------------ |
-| `replicaCount`                       | Number of Odoo replicas to deploy                                                                                              | `1`                |
-| `rollDeploy`                         | Activates a new deployment with each helm upgrade regardless of diff in chances                                                | `false`            |
-| `annotations`                        | Annotations for Odoo pods                                                                                                      | `{}`               |
-| `updateStrategy.type`                | Odoo deployment strategy type                                                                                                  | `RollingUpdate`    |
-| `updateStrategy.rollingUpdate`       | Odoo deployment rolling update configuration parameters                                                                        | `{}`               |
-| `image.repository`                   | Odoo image repository                                                                                                          | `tecnativa/doodba` |
-| `image.tag`                          | Odoo image tag (immutable tags are recommended)                                                                                | `15.0`             |
-| `image.pullPolicy`                   | Odoo image pull policy                                                                                                         | `IfNotPresent`     |
-| `imagePullSecrets`                   | Global Docker registry secret names as an array                                                                                | `[]`               |
-| `nameOverride`                       | String to partially override common.names.fullname                                                                             | `""`               |
-| `fullnameOverride`                   | String to fully override common.names.fullname                                                                                 | `""`               |
-| `serviceAccount.create`              | Specifies whether a ServiceAccount should be created                                                                           | `false`            |
-| `serviceAccount.name`                | The name of the ServiceAccount to create                                                                                       | `""`               |
-| `podSecurityContext.enabled`         | Enabled Odoo pods' Security Context                                                                                            | `false`            |
-| `podSecurityContext.fsGroup`         | Set Odoo pod's Security Context fsGroup                                                                                        | `1001`             |
-| `containerSecurityContext.enabled`   | Enabled Odoo containers' Security Context                                                                                      | `false`            |
-| `containerSecurityContext.runAsUser` | Set Odoo container's Security Context runAsUser                                                                                | `1001`             |
-| `odooPassword`                       | Odoo user password                                                                                                             | `""`               |
-| `config`                             | values in odoo.conf format as multiline string will be merged with the default odoo.conf file and override any existing values | `""`               |
-| `pgBouncer.enabled`                  | Enable a subchart that launches the pgBouncer connection pooler as a middleware between odoo and postgresql                    | `false`            |
+| Name                                 | Description                                                                                                                    | Value           |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ | --------------- |
+| `replicaCount`                       | Number of Odoo replicas to deploy                                                                                              | `1`             |
+| `rollDeploy`                         | Activates a new deployment with each helm upgrade regardless of diff in chances                                                | `false`         |
+| `annotations`                        | Annotations for Odoo pods                                                                                                      | `{}`            |
+| `updateStrategy.type`                | Odoo deployment strategy type                                                                                                  | `RollingUpdate` |
+| `updateStrategy.rollingUpdate`       | Odoo deployment rolling update configuration parameters                                                                        | `{}`            |
+| `image.repository`                   | Odoo image repository                                                                                                          | `pledra/doodba` |
+| `image.tag`                          | Odoo image tag (immutable tags are recommended)                                                                                | `15.0-test`     |
+| `image.pullPolicy`                   | Odoo image pull policy                                                                                                         | `IfNotPresent`  |
+| `imagePullSecrets`                   | Global Docker registry secret names as an array                                                                                | `[]`            |
+| `nameOverride`                       | String to partially override common.names.fullname                                                                             | `""`            |
+| `fullnameOverride`                   | String to fully override common.names.fullname                                                                                 | `""`            |
+| `serviceAccount.create`              | Specifies whether a ServiceAccount should be created                                                                           | `false`         |
+| `serviceAccount.name`                | The name of the ServiceAccount to create                                                                                       | `""`            |
+| `podSecurityContext.enabled`         | Enabled Odoo pods' Security Context                                                                                            | `false`         |
+| `podSecurityContext.fsGroup`         | Set Odoo pod's Security Context fsGroup                                                                                        | `1001`          |
+| `containerSecurityContext.enabled`   | Enabled Odoo containers' Security Context                                                                                      | `false`         |
+| `containerSecurityContext.runAsUser` | Set Odoo container's Security Context runAsUser                                                                                | `1001`          |
+| `odooPassword`                       | Odoo user password                                                                                                             | `""`            |
+| `config`                             | values in odoo.conf format as multiline string will be merged with the default odoo.conf file and override any existing values | `""`            |
+| `extraEnvVars`                       | Array with extra environment variables to add to the Odoo container                                                            | `[]`            |
+| `pgBouncer.enabled`                  | Enable a subchart that launches the pgBouncer connection pooler as a middleware between odoo and postgresql                    | `false`         |
 
 
 ### Odoo postgresql cluster database
 
-| Name                            | Description                            | Value      |
-| ------------------------------- | -------------------------------------- | ---------- |
-| `postgresql.enabled`            | Deploy PostgreSQL container(s)         | `true`     |
-| `postgresql.image.repository`   | Docker repository for postgresql image | `postgres` |
-| `postgresql.image.tag`          | Docker image tag for postgresql image  | `latest`   |
-| `postgresql.postgresqlUsername` | PostgreSQL non-root username           | `odoo`     |
-| `postgresql.postgresqlPassword` | PostgreSQL password                    | `""`       |
-| `postgresql.postgresHost`       | External Database server host          | `""`       |
-| `postgresql.port`               | External Database server port          | `5432`     |
-| `postgresql.externalDatabase`   | standard or gcloud                     | `""`       |
+| Name                          | Description                            | Value      |
+| ----------------------------- | -------------------------------------- | ---------- |
+| `postgresql.enabled`          | Deploy PostgreSQL container(s)         | `true`     |
+| `postgresql.auth.username`    | Name for a custom user to create       | `odoo`     |
+| `postgresql.auth.password`    | Password for the custom user to create | `""`       |
+| `postgresql.auth.database`    | Name for a custom database to create   | `odoo`     |
+| `postgresql.image.repository` | Docker repository for postgresql image | `postgres` |
+| `postgresql.image.tag`        | Docker image tag for postgresql image  | `latest`   |
+| `postgresql.postgresHost`     | External Database server host          | `""`       |
+| `postgresql.port`             | External Database server port          | `5432`     |
+| `postgresql.externalDatabase` | standard or gcloud                     | `""`       |
 
 
 ### Google cloud SQL
@@ -80,7 +82,7 @@ Odoo Doodba
 | `persistence.storageClass`               | Persistent Volume storage class                                                                                                        | `""`                     |
 | `persistence.accessMode`                 | Persistent Volume access modes                                                                                                         | `[]`                     |
 | `persistence.size`                       | Persistent Volume size                                                                                                                 | `8Gi`                    |
-| `persistence.volumeName`                 | The name of the PVC                                                                                                                    | `odoo`                   |
+| `persistence.volumeName`                 | The name of an existing PVC                                                                                                            | `""`                     |
 | `persistence.subPath`                    | refer to a path within the mounted volume (useful for NFS shared storage and multiple environments/deployments)                        | `""`                     |
 | `persistence.annotations`                | Additional annotations for the PVC                                                                                                     | `{}`                     |
 | `persistence.existingClaim`              | refers to the full name of an existing PVC so as to not create a new one but reuse the existing resource                               | `""`                     |
