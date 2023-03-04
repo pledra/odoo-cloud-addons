@@ -94,6 +94,14 @@ odooPassword: ""
 ##  port = 443
 config: ""
 
+## @param extraEnvVars Array with extra environment variables to add to the Odoo container
+## e.g:
+## extraEnvVars:
+##   - name: FOO
+##     value: "bar"
+##
+extraEnvVars: []
+
 pgBouncer:
   ## @param pgBouncer.enabled Enable a subchart that launches the pgBouncer connection pooler as a middleware between odoo and postgresql
   enabled: false
