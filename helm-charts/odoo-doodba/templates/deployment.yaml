@@ -72,8 +72,6 @@ spec:
             value: {{ ternary (include "odoo-doodba.postgresql.fullname" .) .Values.postgresql.postgresHost .Values.postgresql.enabled | default "localhost" }}
           - name: PGUSER
             value: {{ .Values.postgresql.auth.username | quote }}
-          - name: PGDATABASE
-            value: {{ .Values.odooDatabase | quote }}
           - name: PGPASSWORD
             valueFrom:
               secretKeyRef:

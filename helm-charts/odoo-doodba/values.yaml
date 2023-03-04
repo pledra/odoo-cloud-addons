@@ -80,11 +80,6 @@ containerSecurityContext:
 ## Defaults to a random 10-character alphanumeric string if not set
 odooPassword: ""
 
-## @param odooDatabase Odoo default database
-## Default to "odoo" and will create and initialize if the database does not exist.
-## will throw an error on init if postgresql.auth.database has the same value
-odooDatabase: "odoo"
-
 
 ## @param config values in odoo.conf format as multiline string will be merged with the default odoo.conf file and override any existing values
 ## config: |
@@ -121,13 +116,11 @@ postgresql:
 ## @param postgresql.auth.username Name for a custom user to create
 ## @param postgresql.auth.password Password for the custom user to create
 ## @param postgresql.auth.database Name for a custom database to create
-## Not used by default since Doodba creates and initializez the db itself
-## Using both postgresql.auth.database and PGDATABASE with the same value on init will fail.
 ##
   auth:
     username: odoo
     password: ""
-    database: ""
+    database: odoo
 
   image:
     ## @param postgresql.image.repository Docker repository for postgresql image
