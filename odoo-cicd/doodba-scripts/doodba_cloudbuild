@@ -9,19 +9,34 @@ import pathlib
 import yaml
 
 from argparse import ArgumentParser
-from google.cloud.devtools.cloudbuild_v1.types.cloudbuild import StorageSource
+from dotenv import load_dotenv
+
 
 parser = ArgumentParser(description="Build a doodba project using google cloud builder")
 
 parser.add_argument(
-    "-s",
-    "--source",
-    required=True,
-    type=pathlib.Path,
-    help="Source path of the doodba project",
+    "-b", "--bucket", required=True, help="GCS Bucket to store the cloudbuild source"
 )
 parser.add_argument(
-    "-b", "--bucket", required=True, help="GCS Bucket to store the cloudbuild source"
+    "-c",
+    "--credentials",
+    help="Path to credentials file for google auth (overrides GOOGLE_APPLICATION_CREDENTIALS env var)",
+)
+parser.add_argument(
+    "-e",
+    "--env-path",
+    help="Path to the .env file used for substitution in the google cloud build steps",
+)
+parser.add_argument(
+    "-f",
+    "--file",
+    default="prod.yaml",
+    help="Yaml docker-compose file to use in the build stage (default prod.yaml)",
+)
+parser.add_argument(
+    "-i",
+    "--image",
+    help="Docker image name of the build",
 )
 parser.add_argument(
     "-p",
@@ -30,28 +45,41 @@ parser.add_argument(
     help="Path inside the GS Bucket to store the artifacts",
 )
 parser.add_argument(
-    "-c",
-    "--credentials",
-    help="Path to credentials file for google auth (overrides GOOGLE_APPLICATION_CREDENTIALS env var)",
+    "-s",
+    "--source",
+    required=True,
+    type=pathlib.Path,
+    help="Source path of the doodba project",
 )
-parser.add_argument(
-    "-i",
-    "--image",
-    help="Docker image name of the build",
-)
-parser.add_argument("-t", "--tags", nargs='+', help="Docker image tag")
-parser.add_argument(
-    "-e",
-    "--envfile",
-    default="prod.yaml",
-    help="Yaml environment file to use in the build stage (default prod.yaml)",
-)
+parser.add_argument("-t", "--tags", nargs="+", default=[], help="Docker image tag")
+
 
 # Implement safety check for existing image/tag ?
+
 
 def check_doodba_source(source_file_path):
     """Check that source_file_path corresponds to a doodba scaffolding"""
     return True
+
+
+def get_doodba_image(source_path, yaml_file=None):
+    """Get the doodba image name from the yaml_file inside the doodba source"""
+    if not yaml_file:
+        yaml_file = "common.yaml"
+
+    compose_file = os.path.join(source_path, yaml_file)
+
+    with open(compose_file, "r") as file:
+        common_yaml = yaml.safe_load(file)
+        doodba_image = os.path.expandvars(common_yaml["services"]["odoo"]["image"])
+        doodba_image_name, doodba_image_tag = doodba_image.split(":")
+        if not doodba_image_name or not doodba_image_tag:
+            raise Exception(
+                "Could not identify the doodba image from %s using the default yaml "
+                "structure services->odoo->image (Image: '%s', Tag: '%s')"
+                % (compose_file, doodba_image_name, doodba_image_tag)
+            )
+        return "%s:%s" % (doodba_image_name, doodba_image_tag)
 
 
 def upload_blob(bucket_name, source_file_path, destination_blob_name):
@@ -80,6 +108,13 @@ def upload_blob(bucket_name, source_file_path, destination_blob_name):
 
 args = parser.parse_args()
 
+if args.env_path:
+    if not load_dotenv(dotenv_path=args.env_path):
+        raise Exception("Could not load .env file at '%s'" % args.env_path)
+
+doodba_image = get_doodba_image(args.source)
+doodba_image_name, doodba_image_tag = doodba_image.split(":")
+
 if args.credentials:
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = args.credentials
 
@@ -97,21 +132,29 @@ storage_source = cloudbuild_v1.StorageSource(bucket=args.bucket, object_=args.pa
 build.source = cloudbuild_v1.Source(storage_source=storage_source)
 
 build_steps = [
-    {"name": "docker/compose:1.29.2", "args": ["-f", args.envfile, "build", "--pull"]}
+    {
+        "name": "docker/compose:1.29.2",
+        "args": ["-f", args.file, "build", "--pull"],
+    }
 ]
 
-# Get the doodba image name from common.yaml
-with open(os.path.join(args.source, "common.yaml"), "r") as file:
-    common_yaml = yaml.safe_load(file)
-    doodba_image = common_yaml["services"]["odoo"]["image"]
-    doodba_image_name, doodba_image_tag = doodba_image.split(":")
+# If there are additional image names add them to the build steps
+""" if args.image:
+    build_steps.append(
+        {
+            "name": "gcr.io/cloud-builders/docker",
+            "args": ["tag", doodba_image_name, args.image],
+        }
+    ) """
 
-build_image_name = args.image or doodba_image_name
-build_image_tag = args.tags[0] if args.tags else doodba_image_tag
+build.images = [doodba_image]
 
-build_image = "%s:%s" % (build_image_name, build_image_tag)
+for img_tag in args.tags:
+    build_image = "%s:%s" % (doodba_image_name or args.image, img_tag)
 
-if doodba_image != build_image:
+    if build_image != doodba_image:
+        build.images.append(build_image)
+
     build_steps.append(
         {
             "name": "gcr.io/cloud-builders/docker",
@@ -119,15 +162,7 @@ if doodba_image != build_image:
         }
     )
 
-# Add all subsequent tags as extra steps
-for img_tag in args.tags[1:]:
-    build_image = "%s:%s" % (build_image_name, img_tag)
-    build_steps.append(
-        {
-            "name": "gcr.io/cloud-builders/docker",
-            "args": ["tag", doodba_image, build_image],
-        }
-    )
+build_image = args.image or doodba_image_name
 
 build.steps = build_steps
 build.images = [build_image]
