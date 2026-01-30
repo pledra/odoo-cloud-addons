@@ -10,7 +10,6 @@ metadata:
   labels:
 {{ include "odoo-doodba.labels" . | indent 4 }}
   annotations:
-    kubernetes.io/ingress.class: nginx
   {{ if .Values.ingress.wwwRedirect }}
     nginx.ingress.kubernetes.io/from-to-www-redirect: "true"
   {{ end }}
@@ -42,6 +41,7 @@ metadata:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
+  ingressClassName: nginx
 {{- if .Values.ingress.tls }}
   tls:
   {{- range .Values.ingress.cache.tls }}

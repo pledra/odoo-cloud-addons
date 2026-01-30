@@ -10,8 +10,8 @@ metadata:
   labels:
 {{ include "odoo-doodba.labels" . | indent 4 }}
   annotations:
-    kubernetes.io/ingress.class: nginx
   {{- if .Values.ingress.recommendedNginxSettings }}
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
     nginx.ingress.kubernetes.io/proxy-buffering: "on"
     nginx.ingress.kubernetes.io/proxy-body-size: "2000m"
     nginx.ingress.kubernetes.io/proxy-connect-timeout: "15"
@@ -26,6 +26,7 @@ metadata:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
+  ingressClassName: nginx
 {{- if .Values.ingress.tls }}
   tls:
   {{- range .Values.ingress.tls }}
@@ -41,7 +42,6 @@ spec:
     - host: {{ .host | quote }}
       http:
         paths:
-          {{- if ne $.Values.service.geventPath "/websocket" }}
           - path: {{ $.Values.service.geventPath }}
             {{ if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.Version }}
             pathType: Prefix
@@ -56,7 +56,6 @@ spec:
               serviceName: {{ include "odoo-doodba.fullname" $ }}
               servicePort: {{ $.Values.service.geventPort }}
             {{ end }}
-          {{- end }}
           - path: /
             {{ if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.Version }}
             pathType: Prefix
