@@ -1,0 +1,53 @@
+{{- if .Values.backup.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "odoo.fullname" . }}-backup
+  labels:
+    app.kubernetes.io/name: {{ include "odoo.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  schedule: "{{ .Values.backup.schedule }}"              # e.g. "0 1 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: {{ .Values.backup.successfulHistory }}
+  failedJobsHistoryLimit: {{ .Values.backup.failedHistory }}
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: {{ .Values.backup.serviceAccount }}
+          restartPolicy: OnFailure
+          volumes:
+            - name: backup-pvc
+              persistentVolumeClaim:
+                claimName: {{ .Values.backup.pvcName }}
+          containers:
+            - name: click-odoo-backup
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              command:
+                - "click-odoo-backup"
+              args:
+                - "-d"
+                - "{{ .Values.backup.database }}"
+                - "--output=/backups/{{ .Release.Name }}-click-{{ .Values.backup.database }}-$(date +%F).dump"
+              env:
+                # pass through any env your backup needs, e.g. DB creds
+                - name: PGHOST
+                  value: "{{ .Values.postgresql.host }}"
+                - name: PGPORT
+                  value: "{{ .Values.postgresql.port }}"
+                - name: PGUSER
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.postgresql.credentialsSecret }}
+                      key: username
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.postgresql.credentialsSecret }}
+                      key: password
+              volumeMounts:
+                - name: backup-pvc
+                  mountPath: /backups
+{{- end }}

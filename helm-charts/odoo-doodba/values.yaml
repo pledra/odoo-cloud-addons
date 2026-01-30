@@ -185,7 +185,7 @@ service:
   ## @param service.geventPath Path for bus connections
   ## Use "/longpolling" for Odoo 16 and below, "/websocket" for Odoo 17+
   ## default /longpolling
-  geventPath: /longpolling
+  geventPath: /websocket
 
   ## @param service.annotations Additional custom annotations for Odoo service
   ##

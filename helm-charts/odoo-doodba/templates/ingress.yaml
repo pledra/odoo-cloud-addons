@@ -19,14 +19,6 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-send-timeout: "1500"
     nginx.ingress.kubernetes.io/gzip-types: "application/atom+xml application/javascript application/x-javascript application/json application/rss+xml application/vnd.ms-fontobject application/x-font-ttf application/x-web-app-manifest+json application/xhtml+xml application/xml font/opentype image/svg+xml image/x-icon text/css text/xml text/plain text/x-component text/less"
   {{- end }}
-  {{- if eq .Values.service.geventPath "/websocket" }}
-    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
-    nginx.ingress.kubernetes.io/server-snippets: |
-      location /websocket {
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-      }
-  {{- end }}
   {{ if .Values.ingress.wwwRedirect }}
     nginx.ingress.kubernetes.io/from-to-www-redirect: "true"
   {{ end }}
@@ -49,23 +41,10 @@ spec:
     - host: {{ .host | quote }}
       http:
         paths:
-          - path: /
-            {{ if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.Version }}
-            pathType: ImplementationSpecific
-            {{ end }}
-            backend:
-            {{ if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.Version }}
-              service:
-                name: {{ include "odoo-doodba.fullname" $ }}
-                port:
-                  number: {{ $.Values.service.port }}
-            {{ else }}
-              serviceName: {{ include "odoo-doodba.fullname" $ }}
-              servicePort: {{ $.Values.service.port }}
-            {{ end }}
+          {{- if ne $.Values.service.geventPath "/websocket" }}
           - path: {{ $.Values.service.geventPath }}
             {{ if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.Version }}
-            pathType: ImplementationSpecific
+            pathType: Prefix
             {{ end }}
             backend:
             {{ if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.Version }}
@@ -76,6 +55,21 @@ spec:
             {{ else }}
               serviceName: {{ include "odoo-doodba.fullname" $ }}
               servicePort: {{ $.Values.service.geventPort }}
+            {{ end }}
+          {{- end }}
+          - path: /
+            {{ if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.Version }}
+            pathType: Prefix
+            {{ end }}
+            backend:
+            {{ if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.Version }}
+              service:
+                name: {{ include "odoo-doodba.fullname" $ }}
+                port:
+                  number: {{ $.Values.service.port }}
+            {{ else }}
+              serviceName: {{ include "odoo-doodba.fullname" $ }}
+              servicePort: {{ $.Values.service.port }}
             {{ end }}
   {{- end }}
 {{- end }}
