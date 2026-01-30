@@ -179,9 +179,13 @@ service:
   ## @param service.port Odoo service HTTP port
   ## default 80
   port: 80
-  ## @param service.longPollingPort Odoo service HTTP port
+  ## @param service.geventPort Odoo gevent worker port (serves longpolling/websocket)
   ## default 8072
-  longPollingPort: 8072
+  geventPort: 8072
+  ## @param service.geventPath Path for bus connections
+  ## Use "/longpolling" for Odoo 16 and below, "/websocket" for Odoo 17+
+  ## default /longpolling
+  geventPath: /longpolling
 
   ## @param service.annotations Additional custom annotations for Odoo service
   ##

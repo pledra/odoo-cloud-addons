@@ -19,10 +19,9 @@ spec:
     - port: {{ .Values.service.port }}
       targetPort: 8069
       name: http
-      ports:
-    - port: {{ .Values.service.longPollingPort }}
+    - port: {{ .Values.service.geventPort }}
       targetPort: 8072
-      name: longpolling
+      name: gevent
   selector:
     app.kubernetes.io/name: {{ include "odoo-doodba.name" . }}
     app.kubernetes.io/instance: {{ .Release.Name }}

@@ -11,14 +11,22 @@ metadata:
 {{ include "odoo-doodba.labels" . | indent 4 }}
   annotations:
     kubernetes.io/ingress.class: nginx
-  {{ if .Values.ingress.recommendedNginxSettings }}
+  {{- if .Values.ingress.recommendedNginxSettings }}
     nginx.ingress.kubernetes.io/proxy-buffering: "on"
     nginx.ingress.kubernetes.io/proxy-body-size: "2000m"
     nginx.ingress.kubernetes.io/proxy-connect-timeout: "15"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "1500"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "1500"
     nginx.ingress.kubernetes.io/gzip-types: "application/atom+xml application/javascript application/x-javascript application/json application/rss+xml application/vnd.ms-fontobject application/x-font-ttf application/x-web-app-manifest+json application/xhtml+xml application/xml font/opentype image/svg+xml image/x-icon text/css text/xml text/plain text/x-component text/less"
-  {{ end }}
+  {{- end }}
+  {{- if eq .Values.service.geventPath "/websocket" }}
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/server-snippets: |
+      location /websocket {
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+      }
+  {{- end }}
   {{ if .Values.ingress.wwwRedirect }}
     nginx.ingress.kubernetes.io/from-to-www-redirect: "true"
   {{ end }}
@@ -55,7 +63,7 @@ spec:
               serviceName: {{ include "odoo-doodba.fullname" $ }}
               servicePort: {{ $.Values.service.port }}
             {{ end }}
-          - path: /longpolling
+          - path: {{ $.Values.service.geventPath }}
             {{ if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.Version }}
             pathType: ImplementationSpecific
             {{ end }}
@@ -64,10 +72,10 @@ spec:
               service:
                 name: {{ include "odoo-doodba.fullname" $ }}
                 port:
-                  number: {{ $.Values.service.longPollingPort }}
+                  number: {{ $.Values.service.geventPort }}
             {{ else }}
               serviceName: {{ include "odoo-doodba.fullname" $ }}
-              servicePort: {{ $.Values.service.longPollingPort }}
+              servicePort: {{ $.Values.service.geventPort }}
             {{ end }}
   {{- end }}
 {{- end }}

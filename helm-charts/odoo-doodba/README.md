@@ -61,7 +61,8 @@ Odoo Doodba
 | `redis.cluster.enabled`                  | Enable deployment of a multi-tier cluster                                                                                              | `false`                  |
 | `service.type`                           | Odoo service type                                                                                                                      | `ClusterIP`              |
 | `service.port`                           | Odoo service HTTP port                                                                                                                 | `80`                     |
-| `service.longPollingPort`                | Odoo service HTTP port                                                                                                                 | `8072`                   |
+| `service.geventPort`                     | Odoo gevent worker port (serves longpolling/websocket)                                                                                 | `8072`                   |
+| `service.geventPath`                     | Path for bus connections ("/longpolling" for Odoo <=16, "/websocket" for Odoo 17+)                                                     | `/longpolling`           |
 | `service.annotations`                    | Additional custom annotations for Odoo service                                                                                         | `{}`                     |
 | `service.loadBalancerIP`                 | Odoo service Load Balancer IP                                                                                                          | `""`                     |
 | `ingress.enabled`                        | Enable ingress record generation for Odoo                                                                                              | `false`                  |
