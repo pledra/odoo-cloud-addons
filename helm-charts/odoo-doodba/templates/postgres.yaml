@@ -67,6 +67,9 @@ spec:
       postInitApplicationSQL:
         {{- if .Values.odoo.unaccent }}
         - CREATE EXTENSION IF NOT EXISTS unaccent
+        # Odoo only builds its unaccent search indexes when the function is
+        # IMMUTABLE (and a restored dump's indexes fail to create otherwise).
+        - ALTER FUNCTION public.unaccent(text) IMMUTABLE
         {{- end }}
         {{- range $c.postInitApplicationSQL }}
         - {{ . | quote }}
