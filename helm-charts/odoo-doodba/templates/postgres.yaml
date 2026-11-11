@@ -1,0 +1,103 @@
+{{- if .Values.cnpg.enabled -}}
+{{- $c := .Values.cnpg -}}
+{{- if $c.backup.enabled }}
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: {{ $c.name }}-backup
+  labels:
+    {{- include "odoo.labels" . | nindent 4 }}
+spec:
+  retentionPolicy: {{ $c.backup.retentionPolicy | quote }}
+  configuration:
+    destinationPath: {{ required "cnpg.backup.destinationPath is required" $c.backup.destinationPath | quote }}
+    {{- with $c.backup.endpointURL }}
+    endpointURL: {{ . | quote }}
+    {{- end }}
+    s3Credentials:
+      {{- $s := $c.backup.s3Credentials }}
+      accessKeyId: { name: {{ required "cnpg.backup.s3Credentials.secretName is required" $s.secretName }}, key: {{ $s.accessKeyIdKey }} }
+      secretAccessKey: { name: {{ $s.secretName }}, key: {{ $s.secretAccessKeyKey }} }
+      {{- with $s.regionKey }}
+      region: { name: {{ $s.secretName }}, key: {{ . }} }
+      {{- end }}
+    wal:
+      compression: gzip
+      maxParallel: 2
+    data:
+      compression: gzip
+      jobs: 2
+  instanceSidecarConfiguration:
+    resources:
+      {{- toYaml $c.backup.sidecarResources | nindent 6 }}
+---
+{{- end }}
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ $c.name }}
+  labels:
+    {{- include "odoo.labels" . | nindent 4 }}
+spec:
+  instances: {{ $c.instances }}
+  {{- with $c.imageName }}
+  imageName: {{ . | quote }}
+  {{- end }}
+  enablePDB: {{ $c.enablePDB }}
+  storage:
+    size: {{ $c.storage.size | quote }}
+    {{- with $c.storage.storageClass }}
+    storageClass: {{ . | quote }}
+    {{- end }}
+  resources:
+    {{- toYaml $c.resources | nindent 4 }}
+  {{- with $c.parameters }}
+  postgresql:
+    parameters:
+      {{- toYaml . | nindent 6 }}
+  {{- end }}
+  bootstrap:
+    {{- if $c.bootstrap }}
+    {{- toYaml $c.bootstrap | nindent 4 }}
+    {{- else }}
+    initdb:
+      database: {{ .Values.odoo.database | quote }}
+      owner: {{ $c.owner | quote }}
+      {{- if or .Values.odoo.unaccent $c.postInitApplicationSQL }}
+      postInitApplicationSQL:
+        {{- if .Values.odoo.unaccent }}
+        - CREATE EXTENSION IF NOT EXISTS unaccent
+        {{- end }}
+        {{- range $c.postInitApplicationSQL }}
+        - {{ . | quote }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
+  {{- with $c.externalClusters }}
+  externalClusters:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- if $c.backup.enabled }}
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: {{ $c.name }}-backup
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: {{ $c.name }}-daily
+  labels:
+    {{- include "odoo.labels" . | nindent 4 }}
+spec:
+  schedule: {{ $c.backup.schedule | quote }}
+  immediate: true
+  backupOwnerReference: self
+  cluster:
+    name: {{ $c.name }}
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+  {{- end }}
+{{- end }}

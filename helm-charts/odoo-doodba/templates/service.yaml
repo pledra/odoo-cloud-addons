@@ -1,27 +1,34 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "odoo-doodba.fullname" . }}
-  {{ if .Values.service.annotations }}
-  annotations:
-  {{- with .Values.service.annotations }}
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
-  {{ end }}
+  name: {{ include "odoo.fullname" . }}
   labels:
-{{ include "odoo-doodba.labels" . | indent 4 }}
+    {{- include "odoo.labels" . | nindent 4 }}
 spec:
   type: {{ .Values.service.type }}
-  {{- if (and (eq .Values.service.type "LoadBalancer") (not (empty .Values.service.loadBalancerIP))) }}
-  loadBalancerIP: {{ .Values.service.loadBalancerIP }}
-  {{ end }}
-  ports:
-    - port: {{ .Values.service.port }}
-      targetPort: 8069
-      name: http
-    - port: {{ .Values.service.geventPort }}
-      targetPort: 8072
-      name: gevent
   selector:
-    app.kubernetes.io/name: {{ include "odoo-doodba.name" . }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- include "odoo.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: odoo
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
+    {{- if gt (int .Values.odoo.workers) 0 }}
+    - name: gevent
+      port: {{ .Values.service.geventPort }}
+      targetPort: gevent
+    {{- end }}
+{{- if .Values.serviceAccount.create }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "odoo.serviceAccountName" . }}
+  labels:
+    {{- include "odoo.labels" . | nindent 4 }}
+  {{- with .Values.serviceAccount.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+automountServiceAccountToken: false
+{{- end }}

@@ -1,0 +1,31 @@
+image: { repository: rg.nl-ams.scw.cloud/pledra/family-pledra-com, tag: "18.0-abc1234" }
+imagePullSecrets: [{ name: registry-pull }]
+odoo:
+  database: family
+  adminPasswordSecret: { name: odoo }
+  extraSections: { queue_job: { channels: "root:2" } }
+cnpg:
+  backup:
+    enabled: true
+    destinationPath: s3://pledra-pg-backups/odoo-family/
+    endpointURL: https://s3.nl-ams.scw.cloud
+    s3Credentials: { secretName: cnpg-backup }
+backup:
+  enabled: true
+  s3: { endpoint: https://s3.nl-ams.scw.cloud, bucket: pledra-volume-backups/odoo-family, credentialsSecret: { name: volume-backup } }
+  passwordSecret: { name: volume-backup }
+  promURL: http://pushgateway.monitoring.svc:9091
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  fsGroupChangePolicy: OnRootMismatch
+  seccompProfile: { type: RuntimeDefault }
+  seLinuxOptions: { level: "s0:c102,c103" }
+ingress:
+  enabled: true
+  className: traefik
+  host: family.pledra.com
+  annotations: { cert-manager.io/cluster-issuer: letsencrypt }
+networkPolicy: { enabled: true }

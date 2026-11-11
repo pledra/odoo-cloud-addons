@@ -1,0 +1,89 @@
+{{- if .Values.networkPolicy.enabled -}}
+{{- $np := .Values.networkPolicy -}}
+# Ingress only: pods in the release namespace talk to each other (Odoo <->
+# PostgreSQL); the ingress controller reaches Odoo; the CNPG operator and
+# monitoring reach PostgreSQL.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "odoo.fullname" . }}-same-namespace
+  labels:
+    {{- include "odoo.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector: {}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "odoo.fullname" . }}-ingress-controller
+  labels:
+    {{- include "odoo.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "odoo.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: odoo
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        {{- range $np.ingressNamespaces }}
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: {{ . }} }
+        {{- end }}
+      ports:
+        - { port: 8069, protocol: TCP }
+        {{- if gt (int .Values.odoo.workers) 0 }}
+        - { port: {{ .Values.service.geventPort }}, protocol: TCP }
+        {{- end }}
+{{- if .Values.cnpg.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "odoo.fullname" . }}-postgres
+  labels:
+    {{- include "odoo.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: { cnpg.io/cluster: {{ .Values.cnpg.name }} }
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: {{ $np.cnpgOperatorNamespace }} }
+      ports:
+        - { port: 8000, protocol: TCP }
+    {{- with $np.monitoringNamespace }}
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: {{ . }} }
+      ports:
+        - { port: 9187, protocol: TCP }
+    {{- end }}
+{{- end }}
+{{- if $np.acmeSolver }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "odoo.fullname" . }}-acme-solver
+  labels:
+    {{- include "odoo.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: { acme.cert-manager.io/http01-solver: "true" }
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        {{- range $np.ingressNamespaces }}
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: {{ . }} }
+        {{- end }}
+      ports:
+        - { port: 8089, protocol: TCP }
+{{- end }}
+{{- end }}

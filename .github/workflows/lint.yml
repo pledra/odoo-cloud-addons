@@ -1,0 +1,32 @@
+name: Lint charts
+
+on:
+  pull_request:
+  push:
+    branches-ignore: [main, gh-pages]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.15.2
+      - name: Install kubeconform
+        run: |
+          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz \
+            | tar -xz -C /usr/local/bin kubeconform
+      - name: helm lint + kubeconform for every ci/*-values.yaml
+        run: |
+          set -euo pipefail
+          for chart in helm-charts/*/; do
+            for values in "$chart"ci/*-values.yaml; do
+              echo "== $chart with $values"
+              helm lint "$chart" -f "$values"
+              helm template test "$chart" -f "$values" | kubeconform -strict -summary \
+                -schema-location default \
+                -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+                -ignore-missing-schemas
+            done
+          done

@@ -1,399 +1,225 @@
-# Default values for odoo-doodba.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+# odoo-doodba 4.x. One release = one Odoo instance = one database.
+# Secrets are never values here: everything secret is a reference to a
+# Secret you create (External Secrets, sealed secrets, ...).
 
-## @param replicaCount Number of Odoo replicas to deploy
-## NOTE: ReadWriteMany PVC(s) are required if replicaCount > 1
-##
-replicaCount: 1
-
-## @param rollDeploy Activates a new deployment with each helm upgrade regardless of diff in chances
-## Default to false
-rollDeploy: false
-
-## @param annotations Annotations for Odoo pods
-## ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
-annotations: {}
-
-## @param updateStrategy.type Odoo deployment strategy type
-## @param updateStrategy.rollingUpdate Odoo deployment rolling update configuration parameters
-## ref: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#strategy
-## NOTE: Set it to `Recreate` if you use a PV that cannot be mounted on multiple pods
-## e.g:
-## updateStrategy:
-##  type: RollingUpdate
-##  rollingUpdate:
-##    maxSurge: 25%
-##    maxUnavailable: 25%
-##
-updateStrategy:
-  type: RollingUpdate
-  rollingUpdate: {}
-
-## @param image.repository Odoo image repository
-## @param image.tag Odoo image tag (immutable tags are recommended)
-## @param image.pullPolicy Odoo image pull policy
-image:
-  repository: pledra/doodba
-  tag: "15.0-test"
-  pullPolicy: IfNotPresent
-
-## @param imagePullSecrets Global Docker registry secret names as an array
-##
-imagePullSecrets: []
-## @param nameOverride String to partially override common.names.fullname
-##
 nameOverride: ""
-## @param fullnameOverride String to fully override common.names.fullname
-##
 fullnameOverride: ""
 
-## @param serviceAccount.create Specifies whether a ServiceAccount should be created
-## @param serviceAccount.name The name of the ServiceAccount to create
-##
-serviceAccount:
-  # Specifies whether a service account should be created
-  create: false
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
-  name: ""
+image:
+  # Your Doodba project image (required).
+  repository: ""
+  # Prefer an immutable tag (e.g. 18.0-<commit>) or a digest.
+  tag: ""
+  # sha256:... ; when set it wins over the tag.
+  digest: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
 
-## Configure Pods Security Context
-## ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod
-## @param podSecurityContext.enabled Enabled Odoo pods' Security Context
-## @param podSecurityContext.fsGroup Set Odoo pod's Security Context fsGroup
-##
-podSecurityContext:
-  enabled: false
-  fsGroup: 1001
+odoo:
+  # The one database this instance serves (PGDATABASE; dbfilter ^<name>$).
+  database: odoo
+  # Required: Secret holding Odoo's master password (admin_passwd). With
+  # listDb false the database manager is off, but the password still exists.
+  adminPasswordSecret:
+    name: ""
+    key: admin-password
+  # 0 = threaded mode (one process: HTTP, cron, websocket). Plenty for a few
+  # users. > 0 = prefork: that many HTTP workers plus a gevent process on
+  # 8072 for /websocket, routed by the Ingress.
+  workers: 0
+  maxCronThreads: 1
+  proxyMode: true
+  listDb: false
+  withoutDemo: all
+  # Accent-insensitive search; the unaccent extension is created in the
+  # built-in CNPG database automatically.
+  unaccent: true
+  # Extra [options] for odoo.conf (key: value). Example:
+  #   limit_time_real: 600
+  config: {}
+  # Extra sections, e.g. { queue_job: { channels: "root:2" } }
+  extraSections: {}
+  # ir.config_parameter values enforced on every start (before Odoo serves).
+  # report.url: wkhtmltopdf fetches report CSS from this URL; the public URL
+  # may sit behind an auth gate, so point it at the pod itself.
+  systemParameters:
+    report.url: http://localhost:8069
+  # Before Odoo starts (init container):
+  #  - empty database (no tables) and initialize=true: install base
+  #  - otherwise: click-odoo-update (updates only addons whose code changed)
+  initialize: true
+  moduleUpdate:
+    enabled: true
+    extraArgs: []   # e.g. ["--ignore-core-addons"]
+  extraEnv: []
+  extraEnvFrom: []
 
-## Configure Container Security Context (only main container)
-## ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container
-## @param containerSecurityContext.enabled Enabled Odoo containers' Security Context
-## @param containerSecurityContext.runAsUser Set Odoo container's Security Context runAsUser
-##
-containerSecurityContext:
-  enabled: false
-  runAsUser: 1001
-
-## @param odooPassword Odoo user password
-## Defaults to a random 10-character alphanumeric string if not set
-odooPassword: ""
-
-
-## @param config values in odoo.conf format as multiline string will be merged with the default odoo.conf file and override any existing values
-## config: |
-##  [options]
-##  workers = 2
-##  list_db = false
-##  server_wide_modules=web,queue_job
-##  [queue_job]
-##  channels=root:1
-##  scheme = https
-##  host = odoo.host
-##  port = 443
-config: ""
-
-## @param extraEnvVars Array with extra environment variables to add to the Odoo container
-## e.g:
-## extraEnvVars:
-##   - name: FOO
-##     value: "bar"
-##
-extraEnvVars: []
-
-pgBouncer:
-  ## @param pgBouncer.enabled Enable a subchart that launches the pgBouncer connection pooler as a middleware between odoo and postgresql
-  enabled: false
-
-## @section Odoo postgresql cluster database
-postgresql:
-
-  ## @param postgresql.enabled Deploy PostgreSQL container(s)
+# Built-in PostgreSQL (CloudNativePG). Odoo uses the operator-generated
+# Secret <name>-app; no password handling here.
+cnpg:
   enabled: true
-
-## PostgreSQL chart configuration
-## @param postgresql.auth.username Name for a custom user to create
-## @param postgresql.auth.password Password for the custom user to create
-## @param postgresql.auth.database Name for a custom database to create
-##
-  auth:
-    username: odoo
-    password: ""
-    database: odoo
-
-  image:
-    ## @param postgresql.image.repository Docker repository for postgresql image
-    repository: postgres
-    ## @param postgresql.image.tag Docker image tag for postgresql image
-    tag: latest
-
-  ## External Database Configuration
-  ## All of these values are only used when postgresql.enabled is set to false
-
-  ## @param postgresql.postgresHost External Database server host
-  postgresHost: ""
-
-  ## @param postgresql.port External Database server port
-  port: 5432
-
-  ## @param postgresql.externalDatabase standard or gcloud
-  externalDatabase: ""
-
-  ## @section Google cloud SQL
-  ## Only available if postgresql.externalDatabase is set to gcloud
-
-  ## @param postgresql.gcInstanceConnectionName Psql instance name on google cloud
-  ## e.g "project-id:us-west1:instance-name"
-  gcInstanceConnectionName: ""
-
-  ## @param postgresql.gcCredentialsFile Filename of svc account credentials stored in cloudsql-instance-credentials secret
-  ## "credentials.json"
-  gcCredentialsFile: ""
-
-## @section Redis session storage
-redis:
-  ## Redis sub-chart for session storage (and potentially data caching)
-  ## This depends on the installation of https://github.com/camptocamp/odoo-cloud-platform/tree/15.0/session_redis
-  ## One must add this module to the the server_wide_modules in the odoo config file
-
-  ## @param redis.enabled Enable redis subchart for deployment
-  ## default false
-  enabled: false
-
-  ## @param redis.password Password to redis instance
-  ## default redis-passowrd
-  password: redis-password
-
-  # Disable master/slave redis topology by default if redis is enabled
-  cluster:
-    ## @param redis.cluster.enabled Enable deployment of a multi-tier cluster
-    ## default false
+  name: postgres
+  instances: 1
+  # Empty = the operator's default PostgreSQL image.
+  imageName: ""
+  # A single instance with a PDB blocks every node drain.
+  enablePDB: false
+  storage:
+    size: 10Gi
+    storageClass: ""
+  resources:
+    requests: { cpu: 50m, memory: 256Mi }
+    limits: { memory: 512Mi }
+  owner: odoo
+  parameters: {}
+  postInitApplicationSQL: []
+  # Raw spec.bootstrap override (e.g. recovery from a backup). Default:
+  # initdb with database=odoo.database, owner=cnpg.owner.
+  bootstrap: {}
+  # Raw spec.externalClusters (used together with a recovery bootstrap).
+  externalClusters: []
+  # Base backups + WAL archiving with the Barman Cloud plugin.
+  backup:
     enabled: false
+    # s3://bucket/prefix/
+    destinationPath: ""
+    endpointURL: ""
+    retentionPolicy: 30d
+    # Six-field cron (seconds first).
+    schedule: "0 30 2 * * *"
+    s3Credentials:
+      secretName: ""
+      accessKeyIdKey: ACCESS_KEY_ID
+      secretAccessKeyKey: ACCESS_SECRET_KEY
+      regionKey: REGION
+    sidecarResources:
+      requests: { cpu: 10m, memory: 64Mi }
+      limits: { memory: 256Mi }
+
+# When cnpg.enabled is false.
+externalDatabase:
+  host: ""
+  port: 5432
+  user: odoo
+  passwordSecret:
+    name: ""
+    key: password
+
+# /var/lib/odoo: filestore and sessions.
+persistence:
+  enabled: true
+  existingClaim: ""
+  size: 10Gi
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  annotations: {}
+
+# Volume backups with k8up (restic). The PVC is annotated
+# k8up.io/backup "true"/"false" from this switch either way, so the decision
+# is always explicit.
+backup:
+  enabled: false
+  schedule: "15 3 * * *"
+  prune:
+    schedule: "45 4 * * 0"
+    retention: { keepDaily: 7, keepWeekly: 4, keepMonthly: 6 }
+  checkSchedule: "15 5 * * 0"
+  s3:
+    endpoint: ""
+    # bucket or bucket/prefix
+    bucket: ""
+    credentialsSecret:
+      name: ""
+      accessKeyKey: access-key
+      secretKeyKey: secret-key
+  passwordSecret:
+    name: ""
+    key: restic-password
+  # Pushgateway URL for k8up's restic metrics (and the canary result).
+  promURL: ""
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 1Gi }
+  # Nightly restore test: write a timestamp into the volume before the
+  # backup, restore only that file from the latest snapshot afterwards, push
+  # backup_canary_restore_success / backup_canary_age_seconds
+  # (job=backup_canary, instance=<namespace>) to the Pushgateway.
+  canary:
+    enabled: true
+    image: restic/restic:0.19.1
+    writeSchedule: "5 3 * * *"
+    verifySchedule: "15 4 * * *"
 
 service:
-  ## @param service.type Odoo service type
-  ## default ClusterIP
   type: ClusterIP
-  ## Pod ports to expose
-  ## @param service.port Odoo service HTTP port
-  ## default 80
-  port: 80
-  ## @param service.geventPort Odoo gevent worker port (serves longpolling/websocket)
-  ## default 8072
+  port: 8069
   geventPort: 8072
-  ## @param service.geventPath Path for bus connections
-  ## Use "/longpolling" for Odoo 16 and below, "/websocket" for Odoo 17+
-  ## default /longpolling
-  geventPath: /websocket
-
-  ## @param service.annotations Additional custom annotations for Odoo service
-  ##
-  annotations: {}
-
-  ## @param service.loadBalancerIP Odoo service Load Balancer IP
-  ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#type-loadbalancer
-  ##
-  loadBalancerIP: ""
 
 ingress:
-  ## @param ingress.enabled Enable ingress record generation for Odoo
-  ##
   enabled: false
-
-  ## @param ingress.pathType Ingress path type
-  ##
-  pathType: ImplementationSpecific
-  ## @param ingress.recommendedNginxSettings Set of ingress annotations that increase nginx timeout and provides g-zip
-  ## compression and other opinionated proxy settings to make Odoo run smoothly.
-  recommendedNginxSettings: true
-
-  ## @param ingress.wwwRedirect Enable redirect from www domain to non-www domain using an ingress annotation
-  wwwRedirect: false
-
-  ## @param ingress.annotations Additional annotations for the Ingress resource. To enable certificate autogeneration, place here your cert-manager annotations.
-  ## For a full list of possible ingress annotations, please see
-  ## ref: https://github.com/kubernetes/ingress-nginx/blob/master/docs/user-guide/nginx-configuration/annotations.md
-  ## Use this parameter to set the required annotations for cert-manager, see
-  ## ref: https://cert-manager.io/docs/usage/ingress/#supported-annotations
-  ##
-  ## e.g:
-  ## annotations:
-  ##   kubernetes.io/ingress.class: nginx
-  ##   cert-manager.io/cluster-issuer: cluster-issuer-name
-  ##
+  className: ""
   annotations: {}
-    # kubernetes.io/ingress.class: nginx
-    # kubernetes.io/tls-acme: "true"
+  host: ""
+  tls:
+    enabled: true
+    secretName: ""
+  # Prefork mode only (odoo.workers > 0): path served by the gevent process.
+  # /websocket for Odoo 16+, /longpolling for 15 and older.
+  geventPath: /websocket
 
-  ## @param ingress.hosts An array with hostname(s) to be covered with the ingress record
-  ## e.g:
-  ## hosts:
-  ##   - name: odoo.local
-  ##
-  hosts: []
-
-  ## @param ingress.tls An array of hostname(s) provided in ingress.hosts to be covered by TLS
-  ##  - secretName: chart-example-tls
-  ##    hosts:
-  ##      - odoo.local
-  tls: []
-
-  ## @param ingress.cache.enabled Enable cache by creating a separate ingress with rules and headers just for cacheable paths (/static/*)
-  ## default value: False
-  ##  NGINX-INGRESS config needed for this cache ingress to work (has to be setup in nginx-ingress chart)
-  ##  More info about this snippet on https://www.nginx.com/blog/nginx-caching-guide/
-  ##     # config:
-  ##     #   http-snippet: |
-  ##     #     proxy_cache_path /tmp/nginx-cache levels=1:2 keys_zone=static-cache:10m max_size=1g inactive=7d use_temp_path=off;
-  ##     #     proxy_cache_key $scheme$proxy_host$request_uri;
-  ##     #     proxy_cache_lock on;
-  ##     #     proxy_cache_use_stale updating;
-  cache:
-    enabled: false
-
-
-    ## @param ingress.cache.recommendedNginxSettings Add recommended (default) nginx annotations for nginx cache to work
-    ## default value: True
-    recommendedNginxSettings: true
-
-    ## @param ingress.cache.annotations Additional annotations for the Cache Ingress resource. To enable certificate autogeneration, place here your cert-manager annotations.
-    ## For a full list of possible ingress annotations, please see
-    ## ref: https://github.com/kubernetes/ingress-nginx/blob/master/docs/user-guide/nginx-configuration/annotations.md
-    ## Use this parameter to set the required annotations for cert-manager, see
-    ## ref: https://cert-manager.io/docs/usage/ingress/#supported-annotations
-    ##
-    ## e.g:
-    ## annotations:
-    ##   kubernetes.io/ingress.class: nginx
-    ##   cert-manager.io/cluster-issuer: cluster-issuer-name
-    ##
-    annotations: {}
-
-    ## @param ingress.cache.hosts
-    ## Hosts that will have the cache paths applied to
-    ## hosts:
-    ##   - foo.com
-    ##   - bar.com
-    hosts: []
-
-    ## @param ingress.cache.paths
-    ## Paths that will be added to the cache ingress (examples below make use of nginx.ingress.kubernetes.io/use-regex: true)
-    ## paths:
-    ##   - "/*/static/*"
-    ##   - "/web/image/*"
-    ##   - "/web/content/*"
-    ##   - "/website/image/*"
-    paths: []
-
-    ## @param ingress.cache.tls Same tls configuration as in the main ingress if cache is applied over SSL connection
-    tls: []
-
-## Persistence Parameters
-## ref: https://kubernetes.io/docs/user-guide/persistent-volumes/
-##
-persistence:
-
-  ## @param persistence.enabled Enable persistence using Persistent Volume Claims
-  ##
-  enabled: true
-
-  ## @param persistence.initVolume Activate init-container which casts chown on the odoo-volume (filestore)
-  ## to be set with the UID of the odoo user in the container
-  ## default value: True
-  initVolume: true
-
-  ## @param persistence.storageClass Persistent Volume storage class
-  ## If defined, storageClassName: <storageClass>
-  ## If set to "-", storageClassName: "", which disables dynamic provisioning
-  ## If undefined (the default) or set to null, no storageClassName spec is set, choosing the default provisioner
-  ##
-  storageClass: ""
-
-  ## @param persistence.accessMode [array] Persistent Volume access modes
-  ##
-  accessMode: ReadWriteOnce
-
-  ## @param persistence.size Persistent Volume size
-  ##
-  size: 8Gi
-
-  ## @param persistence.volumeName The name of an existing PVC
-  ## default value: ""
-  volumeName: ""
-
-  ## @param persistence.subPath refer to a path within the mounted volume (useful for NFS shared storage and multiple environments/deployments)
-  subPath: ""
-
-  ## @param persistence.annotations Additional annotations for the PVC
-  annotations: {}
-
-  ## @param persistence.existingClaim refers to the full name of an existing PVC so as to not create a new one but reuse the existing resource
-  existingClaim: ""
-
-  ## @param persistence.extraVolumeMounts additional server volumeMounts (usefull in NFS scenarios to access live filestore for staging replication)
-  ## - name: odoo
-  ##   mountPath: /var/lib/odoo-live
-  ##   subpath: live
-  ##   readOnly: true
-  extraVolumeMounts: []
-
-
-## Odoo containers' resource requests and limits
-## ref: https://kubernetes.io/docs/user-guide/compute-resources/
-## @param resources.limits The resources limits for the Odoo container
-## @param resources.requests [object] The requested resources for the Odoo container
-##
 resources:
-  requests:
-    cpu: 200m
-    memory: 512Mi
-  limits: {}
+  requests: { cpu: 50m, memory: 512Mi }
+  limits: { memory: 1536Mi }
+# The init container (module update) defaults to the same resources.
+initResources: {}
 
-## Configure extra options for Odoo containers' liveness and readiness probes
-## ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/#configure-probes
-## @param livenessProbe.enabled Enable livenessProbe
-## @param livenessProbe.initialDelaySeconds Initial delay seconds for livenessProbe
-## @param livenessProbe.periodSeconds Period seconds for livenessProbe
-## @param livenessProbe.timeoutSeconds Timeout seconds for livenessProbe
-## @param livenessProbe.failureThreshold Failure threshold for livenessProbe
-## @param livenessProbe.successThreshold Success threshold for livenessProbe
-##
-livenessProbe:
-  enabled: true
-  initialDelaySeconds: 60
-  periodSeconds: 30
-  timeoutSeconds: 5
-  failureThreshold: 10
-  successThreshold: 1
+probes:
+  # /web/health exists from Odoo 16. For 15 and older use type: tcp.
+  type: http
+  path: /web/health
+  startup: { periodSeconds: 10, failureThreshold: 30, timeoutSeconds: 5 }
+  liveness: { periodSeconds: 30, failureThreshold: 4, timeoutSeconds: 5 }
+  readiness: { periodSeconds: 10, failureThreshold: 3, timeoutSeconds: 5 }
 
-## @param readinessProbe.enabled Enable readinessProbe
-## @param readinessProbe.initialDelaySeconds Initial delay seconds for readinessProbe
-## @param readinessProbe.periodSeconds Period seconds for readinessProbe
-## @param readinessProbe.timeoutSeconds Timeout seconds for readinessProbe
-## @param readinessProbe.failureThreshold Failure threshold for readinessProbe
-## @param readinessProbe.successThreshold Success threshold for readinessProbe
-##
-readinessProbe:
-  enabled: true
-  initialDelaySeconds: 30
-  periodSeconds: 10
-  timeoutSeconds: 5
-  failureThreshold: 10
-  successThreshold: 1
+# Doodba images run as odoo (1000:1000). Satisfies the "restricted" Pod
+# Security Standard. On SELinux hosts (MicroOS) set a fixed
+# seLinuxOptions.level per instance: the backup pods reuse it to read the
+# volume.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  fsGroupChangePolicy: OnRootMismatch
+  seccompProfile: { type: RuntimeDefault }
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities: { drop: ["ALL"] }
+  # Doodba writes /opt/odoo/auto at start.
+  readOnlyRootFilesystem: false
 
-## @param nodeSelector Node labels for pod assignment
-## ref: https://kubernetes.io/docs/user-guide/node-selection/
-##
+networkPolicy:
+  enabled: false
+  # Namespaces allowed to reach Odoo's HTTP ports (the ingress controller).
+  ingressNamespaces: [traefik]
+  cnpgOperatorNamespace: cnpg-system
+  # Namespace allowed to scrape PostgreSQL (port 9187); empty to skip.
+  monitoringNamespace: monitoring
+  # cert-manager HTTP-01 solver pods in this namespace, reached by the ingress controller.
+  acmeSolver: true
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+podAnnotations: {}
+podLabels: {}
 nodeSelector: {}
-
-## @param tolerations Tolerations for pod assignment
-## ref: https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/
-##
 tolerations: []
-
-## @param affinity Affinity for pod assignment
-## Ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#affinity-and-anti-affinity
-## NOTE: podAffinityPreset, podAntiAffinityPreset, and  nodeAffinityPreset will be ignored when it's set
-##
 affinity: {}
+extraVolumes: []
+extraVolumeMounts: []
+
+# Extra manifests, rendered with tpl (ExternalSecrets, Middlewares, ...).
+extraObjects: []

@@ -1,10 +1,79 @@
+{{- $options := dict "workers" .Values.odoo.workers "max_cron_threads" .Values.odoo.maxCronThreads -}}
+{{- if gt (int .Values.odoo.workers) 0 }}
+{{- $_ := set $options "gevent_port" .Values.service.geventPort -}}
+{{- end }}
+{{- $options = mergeOverwrite $options .Values.odoo.config -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "odoo-doodba.fullname" . }}
+  name: {{ include "odoo.fullname" . }}
   labels:
-{{ include "odoo-doodba.labels" . | indent 4 }}
+    {{- include "odoo.labels" . | nindent 4 }}
 data:
-  {{- if .Values.config }}
-  k8s_configmap.conf: {{ tpl (toYaml .Values.config) $ | indent 2 }}
-  {{- end }}
+  # Doodba merges /opt/odoo/custom/conf.d/* after its own templates and
+  # expands $VARIABLES from the environment.
+  90-helm.conf: |
+    [options]
+    {{- range $k, $v := $options }}
+    {{ $k }} = {{ $v }}
+    {{- end }}
+    {{- range $section, $kv := .Values.odoo.extraSections }}
+
+    [{{ $section }}]
+    {{- range $k, $v := $kv }}
+    {{ $k }} = {{ $v }}
+    {{- end }}
+    {{- end }}
+  # Init container: runs through Doodba's entrypoint (waits for the
+  # database, links addons, writes odoo.conf), then this.
+  prepare.sh: |
+    #!/bin/sh
+    set -eu
+    state=$(python3 - <<'EOF'
+    import os
+    import psycopg2
+    try:
+        conn = psycopg2.connect(dbname=os.environ["PGDATABASE"])
+    except psycopg2.OperationalError as e:
+        print("unreachable" if "does not exist" not in str(e) else "missing")
+        raise SystemExit
+    cur = conn.cursor()
+    cur.execute("SELECT to_regclass('ir_module_module')")
+    print("ready" if cur.fetchone()[0] else "empty")
+    EOF
+    )
+    echo "database $PGDATABASE: $state"
+    case "$state" in
+      missing|unreachable)
+        echo "cannot continue: database $PGDATABASE is $state" >&2
+        exit 1 ;;
+      empty)
+        {{- if .Values.odoo.initialize }}
+        echo "installing base into the empty database"
+        odoo -d "$PGDATABASE" -i base --stop-after-init --no-http
+        {{- else }}
+        echo "database is empty and odoo.initialize is false: restore a dump first" >&2
+        exit 1
+        {{- end }}
+        ;;
+      ready)
+        {{- if .Values.odoo.moduleUpdate.enabled }}
+        echo "updating changed addons"
+        click-odoo-update -d "$PGDATABASE"{{ range .Values.odoo.moduleUpdate.extraArgs }} {{ . | quote }}{{ end }}
+        {{- else }}
+        echo "module update disabled"
+        {{- end }}
+        ;;
+    esac
+    {{- if .Values.odoo.systemParameters }}
+    click-odoo -d "$PGDATABASE" /opt/helm/system_parameters.py
+    {{- end }}
+  system_parameters.py: |
+    # Run by click-odoo (provides `env`; commits on success).
+    import json
+    wanted = json.loads({{ .Values.odoo.systemParameters | toJson | quote }})
+    params = env["ir.config_parameter"].sudo()
+    for key, value in wanted.items():
+        if params.get_param(key) != str(value):
+            params.set_param(key, str(value))
+            print("system parameter %s set" % key)

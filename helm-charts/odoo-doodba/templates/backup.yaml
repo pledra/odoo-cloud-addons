@@ -1,0 +1,187 @@
+{{- if .Values.backup.enabled -}}
+{{- $b := .Values.backup -}}
+{{- $full := include "odoo.fullname" . -}}
+{{- $claim := include "odoo.claimName" . -}}
+{{- $repo := printf "s3:%s/%s" (required "backup.s3.endpoint is required" $b.s3.endpoint) (required "backup.s3.bucket is required" $b.s3.bucket) -}}
+{{- $pod := .Values.podSecurityContext -}}
+{{- $credName := required "backup.s3.credentialsSecret.name is required" $b.s3.credentialsSecret.name -}}
+{{- $pwName := required "backup.passwordSecret.name is required" $b.passwordSecret.name -}}
+# Nightly restic backup of the filestore volume (k8up).
+apiVersion: k8up.io/v1
+kind: Schedule
+metadata:
+  name: {{ $full }}-volumes
+  labels:
+    {{- include "odoo.labels" . | nindent 4 }}
+spec:
+  backend:
+    repoPasswordSecretRef: { name: {{ $pwName }}, key: {{ $b.passwordSecret.key }} }
+    s3:
+      endpoint: {{ $b.s3.endpoint | quote }}
+      bucket: {{ $b.s3.bucket | quote }}
+      accessKeyIDSecretRef: { name: {{ $credName }}, key: {{ $b.s3.credentialsSecret.accessKeyKey }} }
+      secretAccessKeySecretRef: { name: {{ $credName }}, key: {{ $b.s3.credentialsSecret.secretKeyKey }} }
+  resourceRequirementsTemplate:
+    {{- toYaml $b.resources | nindent 4 }}
+  backup:
+    schedule: {{ $b.schedule | quote }}
+    # Read the files as their owner, with the app's SELinux level.
+    podSecurityContext:
+      runAsUser: {{ $pod.runAsUser }}
+      runAsGroup: {{ $pod.runAsGroup }}
+      {{- with $pod.seLinuxOptions }}
+      seLinuxOptions:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- with $b.promURL }}
+    promURL: {{ . | quote }}
+    {{- end }}
+    successfulJobsHistoryLimit: 2
+    failedJobsHistoryLimit: 2
+  prune:
+    schedule: {{ $b.prune.schedule | quote }}
+    retention:
+      {{- toYaml $b.prune.retention | nindent 6 }}
+    successfulJobsHistoryLimit: 1
+    failedJobsHistoryLimit: 2
+  check:
+    schedule: {{ $b.checkSchedule | quote }}
+    successfulJobsHistoryLimit: 1
+    failedJobsHistoryLimit: 2
+{{- if $b.canary.enabled }}
+{{- $restricted := dict "allowPrivilegeEscalation" false "readOnlyRootFilesystem" true "capabilities" (dict "drop" (list "ALL")) }}
+---
+# Restore test, part 1: a timestamp at the volume root, before the backup.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $full }}-canary-write
+  labels:
+    {{- include "odoo.labels" . | nindent 4 }}
+spec:
+  schedule: {{ $b.canary.writeSchedule | quote }}
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: backup-canary
+            app.kubernetes.io/instance: {{ .Release.Name }}
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          # The volume is ReadWriteOnce: run next to Odoo.
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels:
+                      {{- include "odoo.selectorLabels" . | nindent 22 }}
+                      app.kubernetes.io/component: odoo
+                  topologyKey: kubernetes.io/hostname
+          securityContext:
+            {{- toYaml (omit $pod "fsGroup" "fsGroupChangePolicy") | nindent 12 }}
+          containers:
+            - name: write
+              image: {{ $b.canary.image }}
+              command: ["/bin/sh", "-c"]
+              args:
+                - date +%s > /volume/.backup-canary.tmp && mv /volume/.backup-canary.tmp /volume/.backup-canary && echo "canary written"
+              securityContext:
+                {{- toYaml $restricted | nindent 16 }}
+              resources:
+                requests: { cpu: 5m, memory: 16Mi }
+                limits: { memory: 64Mi }
+              volumeMounts:
+                - { name: volume, mountPath: /volume }
+          volumes:
+            - name: volume
+              persistentVolumeClaim: { claimName: {{ $claim }} }
+---
+# Restore test, part 2: restore only that file from the latest snapshot into
+# this pod's /tmp and report its age.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $full }}-canary-verify
+  labels:
+    {{- include "odoo.labels" . | nindent 4 }}
+spec:
+  schedule: {{ $b.canary.verifySchedule | quote }}
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: backup-canary
+            app.kubernetes.io/instance: {{ .Release.Name }}
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: {{ $pod.runAsUser }}
+            runAsGroup: {{ $pod.runAsGroup }}
+            seccompProfile: { type: RuntimeDefault }
+          containers:
+            - name: verify
+              image: {{ $b.canary.image }}
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -u
+                  SNAPSHOT_PATH=/data/{{ $claim }}
+                  now=$(date +%s); ok=0; age=-1
+                  if restic restore latest --path "$SNAPSHOT_PATH" \
+                       --include "$SNAPSHOT_PATH/.backup-canary" --target /tmp/restore; then
+                    ts=$(cat "/tmp/restore$SNAPSHOT_PATH/.backup-canary" 2>/dev/null || true)
+                    case "$ts" in
+                      ''|*[!0-9]*) echo "restore worked but the canary is missing or garbled" ;;
+                      *) age=$((now - ts)); ok=1 ;;
+                    esac
+                  else
+                    echo "restore failed"
+                  fi
+                  echo "restore ok=$ok, canary age ${age}s"
+                  {{- with $b.promURL }}
+                  printf '# TYPE backup_canary_restore_success gauge\nbackup_canary_restore_success %s\n# TYPE backup_canary_age_seconds gauge\nbackup_canary_age_seconds %s\n' "$ok" "$age" > /tmp/metrics
+                  wget -q -O /dev/null --post-file=/tmp/metrics \
+                    "{{ . }}/metrics/job/backup_canary/instance/{{ $.Release.Namespace }}" \
+                    || { echo "push to the Pushgateway failed"; exit 1; }
+                  {{- end }}
+                  [ "$ok" = 1 ]
+              env:
+                - name: RESTIC_REPOSITORY
+                  value: {{ $repo | quote }}
+                - name: RESTIC_PASSWORD
+                  valueFrom: { secretKeyRef: { name: {{ $pwName }}, key: {{ $b.passwordSecret.key }} } }
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom: { secretKeyRef: { name: {{ $credName }}, key: {{ $b.s3.credentialsSecret.accessKeyKey }} } }
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom: { secretKeyRef: { name: {{ $credName }}, key: {{ $b.s3.credentialsSecret.secretKeyKey }} } }
+                - { name: RESTIC_CACHE_DIR, value: /tmp/cache }
+                - { name: HOME, value: /tmp }
+              securityContext:
+                {{- toYaml $restricted | nindent 16 }}
+              resources:
+                requests: { cpu: 20m, memory: 64Mi }
+                limits: { memory: 512Mi }
+              volumeMounts:
+                - { name: tmp, mountPath: /tmp }
+          volumes:
+            - name: tmp
+              emptyDir: { sizeLimit: 1Gi }
+{{- end }}
+{{- end }}

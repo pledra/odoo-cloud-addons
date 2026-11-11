@@ -1,76 +1,37 @@
 {{- if .Values.ingress.enabled -}}
-{{- if semverCompare ">=1.19-0" .Capabilities.KubeVersion.Version -}}
+{{- $host := required "ingress.host is required" .Values.ingress.host -}}
+{{- $svc := include "odoo.fullname" . -}}
 apiVersion: networking.k8s.io/v1
-{{- else -}}
-apiVersion: networking.k8s.io/v1beta1
-{{- end }}
 kind: Ingress
 metadata:
-  name: {{ include "odoo-doodba.fullname" . }}
+  name: {{ $svc }}
   labels:
-{{ include "odoo-doodba.labels" . | indent 4 }}
-  annotations:
-  {{- if .Values.ingress.recommendedNginxSettings }}
-    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
-    nginx.ingress.kubernetes.io/proxy-buffering: "on"
-    nginx.ingress.kubernetes.io/proxy-body-size: "2000m"
-    nginx.ingress.kubernetes.io/proxy-connect-timeout: "15"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "1500"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "1500"
-    nginx.ingress.kubernetes.io/gzip-types: "application/atom+xml application/javascript application/x-javascript application/json application/rss+xml application/vnd.ms-fontobject application/x-font-ttf application/x-web-app-manifest+json application/xhtml+xml application/xml font/opentype image/svg+xml image/x-icon text/css text/xml text/plain text/x-component text/less"
-  {{- end }}
-  {{ if .Values.ingress.wwwRedirect }}
-    nginx.ingress.kubernetes.io/from-to-www-redirect: "true"
-  {{ end }}
+    {{- include "odoo.labels" . | nindent 4 }}
   {{- with .Values.ingress.annotations }}
-    {{- toYaml . | nindent 4 }}
+  annotations:
+    {{- tpl (toYaml .) $ | nindent 4 }}
   {{- end }}
 spec:
-  {{- with .Values.ingress.spec }}
-  {{- toYaml . | nindent 2 }}
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
   {{- end }}
-{{- if .Values.ingress.tls }}
+  {{- if .Values.ingress.tls.enabled }}
   tls:
-  {{- range .Values.ingress.tls }}
-    - hosts:
-      {{- range .hosts }}
-        - {{ . | quote }}
-      {{- end }}
-      secretName: {{ .secretName }}
+    - hosts: [{{ $host | quote }}]
+      secretName: {{ default (printf "%s-tls" $svc) .Values.ingress.tls.secretName }}
   {{- end }}
-{{- end }}
   rules:
-  {{- range .Values.ingress.hosts }}
-    - host: {{ .host | quote }}
+    - host: {{ $host | quote }}
       http:
         paths:
-          - path: {{ $.Values.service.geventPath }}
-            {{ if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.Version }}
+          {{- if gt (int .Values.odoo.workers) 0 }}
+          - path: {{ .Values.ingress.geventPath }}
             pathType: Prefix
-            {{ end }}
             backend:
-            {{ if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.Version }}
-              service:
-                name: {{ include "odoo-doodba.fullname" $ }}
-                port:
-                  number: {{ $.Values.service.geventPort }}
-            {{ else }}
-              serviceName: {{ include "odoo-doodba.fullname" $ }}
-              servicePort: {{ $.Values.service.geventPort }}
-            {{ end }}
+              service: { name: {{ $svc }}, port: { name: gevent } }
+          {{- end }}
           - path: /
-            {{ if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.Version }}
             pathType: Prefix
-            {{ end }}
             backend:
-            {{ if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.Version }}
-              service:
-                name: {{ include "odoo-doodba.fullname" $ }}
-                port:
-                  number: {{ $.Values.service.port }}
-            {{ else }}
-              serviceName: {{ include "odoo-doodba.fullname" $ }}
-              servicePort: {{ $.Values.service.port }}
-            {{ end }}
-  {{- end }}
+              service: { name: {{ $svc }}, port: { name: http } }
 {{- end }}

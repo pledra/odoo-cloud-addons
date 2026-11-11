@@ -1,0 +1,6 @@
+image: { repository: example/odoo, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000" }
+odoo: { database: x, workers: 2, adminPasswordSecret: { name: odoo } }
+cnpg: { enabled: false }
+externalDatabase: { host: db, passwordSecret: { name: db } }
+probes: { type: tcp }
+ingress: { enabled: true, host: x.example.com, geventPath: /longpolling }
