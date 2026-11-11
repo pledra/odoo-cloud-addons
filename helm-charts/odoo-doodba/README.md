@@ -8,7 +8,7 @@ What you get, each part switchable:
 | Part | Default | Notes |
 |---|---|---|
 | Odoo Deployment | on | 1 replica, `Recreate`, runs as `odoo` (1000), passes the *restricted* Pod Security Standard, probes on `/web/health` |
-| `prepare` init container | on | installs `base` into an empty database, otherwise `click-odoo-update` (only addons whose code changed), then enforces `odoo.systemParameters` |
+| `prepare` init container | on | installs `base` into an empty database, then enforces `odoo.systemParameters`; module updates only if `odoo.moduleUpdate.enabled` (off) |
 | PostgreSQL ([CloudNativePG](https://cloudnative-pg.io)) | on | Odoo reads the operator's `<name>-app` Secret; optional Barman Cloud backups (base + WAL) |
 | Filestore PVC | on | annotated `k8up.io/backup: "true"/"false"` so the backup decision is always explicit; kept on uninstall |
 | Volume backups ([k8up](https://k8up.io)) | off | restic Schedule (backup/prune/check) + nightly **restore test** (canary) pushed to a Pushgateway |
@@ -71,8 +71,20 @@ variables; the chart sets `PG*`, `DB_FILTER` (`^<database>$`), `LIST_DB`,
 
 1. Build and push an immutable tag (`<odoo version>-<commit>`).
 2. Change `image.tag` in the release values (git, for Flux).
-3. The pod is recreated; `prepare` updates the changed addons before Odoo
-   serves. Check: `kubectl logs deploy/<release>-odoo -c prepare`.
+3. The pod is recreated with the new code; the database is not touched.
+4. Update the addons whose files changed (core addons skipped by default),
+   then restart so every worker loads the new registry:
+
+       kubectl exec deploy/<release>-odoo -c odoo -- /bin/sh /opt/helm/update.sh
+       kubectl rollout restart deploy/<release>-odoo
+
+   Extra arguments are passed to `click-odoo-update` (`--i18n-overwrite`,
+   `--update-all`). A full update including Odoo's own addons:
+   `click-odoo-update -d <database>` directly.
+
+With `odoo.moduleUpdate.enabled: true`, step 4 runs automatically in the
+`prepare` init container before Odoo serves
+(`kubectl logs deploy/<release>-odoo -c prepare`).
 
 Rolling back the image does not roll back a module update's database
 changes: restore the database (CNPG point-in-time) if a migration must be

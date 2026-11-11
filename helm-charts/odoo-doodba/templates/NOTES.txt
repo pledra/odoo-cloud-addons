@@ -3,7 +3,7 @@ Odoo {{ .Chart.AppVersion }} ({{ include "odoo.image" . }}) serving database "{{
 URL: https://{{ .Values.ingress.host }}
 {{- end }}
 
-Before Odoo starts, the "prepare" init container {{ if .Values.odoo.moduleUpdate.enabled }}updates changed addons (click-odoo-update){{ else }}skips module updates{{ end }}{{ if .Values.odoo.initialize }} and installs base into an empty database{{ end }}.
+Before Odoo starts, the "prepare" init container {{ if .Values.odoo.moduleUpdate.enabled }}updates changed addons (click-odoo-update){{ else }}does not update modules (run: kubectl -n {{ .Release.Namespace }} exec deploy/{{ include "odoo.fullname" . }} -c odoo -- /bin/sh /opt/helm/update.sh){{ end }}{{ if .Values.odoo.initialize }} and installs base into an empty database{{ end }}.
   kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "odoo.fullname" . }} -c prepare
 {{- if .Values.cnpg.enabled }}
 

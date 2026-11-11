@@ -64,6 +64,10 @@ spec:
               mountPath: /opt/helm/system_parameters.py
               subPath: system_parameters.py
               readOnly: true
+            - name: config
+              mountPath: /opt/helm/update.sh
+              subPath: update.sh
+              readOnly: true
       containers:
         - name: odoo
           image: {{ include "odoo.image" . }}
@@ -96,6 +100,10 @@ spec:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             {{- include "odoo.volumeMounts" . | nindent 12 }}
+            - name: config
+              mountPath: /opt/helm/update.sh
+              subPath: update.sh
+              readOnly: true
       volumes:
         - name: config
           configMap:

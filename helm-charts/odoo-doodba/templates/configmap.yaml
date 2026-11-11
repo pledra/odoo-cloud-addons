@@ -58,8 +58,7 @@ data:
         ;;
       ready)
         {{- if .Values.odoo.moduleUpdate.enabled }}
-        echo "updating changed addons"
-        click-odoo-update -d "$PGDATABASE"{{ range .Values.odoo.moduleUpdate.extraArgs }} {{ . | quote }}{{ end }}
+        /bin/sh /opt/helm/update.sh
         {{- else }}
         echo "module update disabled"
         {{- end }}
@@ -68,6 +67,13 @@ data:
     {{- if .Values.odoo.systemParameters }}
     click-odoo -d "$PGDATABASE" /opt/helm/system_parameters.py
     {{- end }}
+  update.sh: |
+    #!/bin/sh
+    # Updates the addons whose files changed since the last update. Extra
+    # arguments are passed on (e.g. --update-all, --i18n-overwrite).
+    set -eu
+    echo "updating changed addons in $PGDATABASE"
+    exec click-odoo-update -d "$PGDATABASE"{{ range .Values.odoo.moduleUpdate.extraArgs }} {{ . | quote }}{{ end }} "$@"
   system_parameters.py: |
     # Run by click-odoo (provides `env`; commits on success).
     import json

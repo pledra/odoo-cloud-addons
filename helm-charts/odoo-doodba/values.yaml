@@ -46,11 +46,16 @@ odoo:
     report.url: http://localhost:8069
   # Before Odoo starts (init container):
   #  - empty database (no tables) and initialize=true: install base
-  #  - otherwise: click-odoo-update (updates only addons whose code changed)
+  #  - otherwise, if moduleUpdate.enabled: click-odoo-update (only addons
+  #    whose files changed since the last update)
   initialize: true
+  # Off: a new image only replaces the code; the database is updated when you
+  # run /opt/helm/update.sh in the pod (README "Deploying a new image").
+  # extraArgs apply to both. --ignore-core-addons: Odoo's own addons are not
+  # updated (safe under Odoo's stable policy); drop it for a full update.
   moduleUpdate:
-    enabled: true
-    extraArgs: []   # e.g. ["--ignore-core-addons"]
+    enabled: false
+    extraArgs: ["--ignore-core-addons"]
   extraEnv: []
   extraEnvFrom: []
 
