@@ -30,6 +30,7 @@ odoo:
   maxCronThreads: 1
   proxyMode: true
   listDb: false
+  # "all" up to Odoo 18; Odoo 19+ wants a boolean ("True") and warns otherwise.
   withoutDemo: all
   # Accent-insensitive search; the unaccent extension is created in the
   # built-in CNPG database automatically.

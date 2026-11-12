@@ -79,7 +79,10 @@ data:
     import json
     wanted = json.loads({{ .Values.odoo.systemParameters | toJson | quote }})
     params = env["ir.config_parameter"].sudo()
+    # Odoo 20 replaced get_param/set_param with typed get_str/set_str.
+    get = getattr(params, "get_str", None) or params.get_param
+    put = getattr(params, "set_str", None) or params.set_param
     for key, value in wanted.items():
-        if params.get_param(key) != str(value):
-            params.set_param(key, str(value))
+        if get(key) != str(value):
+            put(key, str(value))
             print("system parameter %s set" % key)
