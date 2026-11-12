@@ -145,6 +145,9 @@ backup:
   resources:
     requests: { cpu: 50m, memory: 128Mi }
     limits: { memory: 1Gi }
+  # A k8up job that cannot even start its pod (e.g. refused by admission)
+  # stays "Running" forever; with a deadline it fails and alerts.
+  activeDeadlineSeconds: 10800
   # Nightly restore test: write a timestamp into the volume before the
   # backup, restore only that file from the latest snapshot afterwards, push
   # backup_canary_restore_success / backup_canary_age_seconds
